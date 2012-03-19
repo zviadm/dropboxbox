@@ -2,8 +2,9 @@
 #define __DBFAT_H
 
 #include <stdint.h>
+#include <wchar.h>
 
-typedef uint16_t wchar;
+typedef wchar_t wchar;
 
 struct EntryMetaData {
     uint32_t size;
@@ -13,7 +14,7 @@ struct EntryMetaData {
     uint8_t is_dir;
     uint8_t name_chars;
     uint8_t name_checksum;
-    unsigned char short_name[11];
+    uint8_t short_name[12];
     wchar *name;
 };
 
@@ -26,9 +27,12 @@ struct DirEntry {
     struct EntryMetaData metadata;
 };
 
+// Directory Entries
+struct DirEntry **DIR_ENTRIES;
+struct DirEntry *ROOT_DIR_ENTRY;
+
 // FAT Entries
 uint32_t *FAT_ENTRIES;
-struct DirEntry *FAT_ENTRIES;
 uint32_t LAST_FREE_ENTRY = 2;
 
 // FAT Entry Constants
@@ -54,13 +58,13 @@ uint32_t LAST_FREE_ENTRY = 2;
 
 // BootSector and FSInfo constants
 #define UINT16_TOARRAY(x) \
-    (x & 0xFF), ((x >>  8) & 0xFF)
+    ((x) & 0xFF), (((x) >> 8) & 0xFF)
 
 #define UINT24_TOARRAY(x) \
-    UINT16_TOARRAY(x), ((x >> 16) & 0xFF)
+    UINT16_TOARRAY(x), (((x) >> 16) & 0xFF)
 
 #define UINT32_TOARRAY(x) \
-    UINT24_TOARRAY(x), ((x >> 24) & 0xFF)
+    UINT24_TOARRAY(x), (((x) >> 24) & 0xFF)
 
 #define BPB_BytesPerSector      512
 #define BPB_SectorsPerCluster   1
@@ -68,7 +72,7 @@ uint32_t LAST_FREE_ENTRY = 2;
 #define BPB_TotalSectors        262144
 #define tmpFATSz32_1 (BPB_TotalSectors - BPB_ReservedSectorCount)
 #define tmpFATSz32_2 (BPB_SectorsPerCluster * BPB_BytesPerSector / 32 + 2)
-#define BPB_FATSz32             (tmpFATSz32_1 + tmpFATSz32_2 - 1) / tmpFATSz32_2
+#define BPB_FATSz32             ((uint32_t)((tmpFATSz32_1 + tmpFATSz32_2 - 1) / tmpFATSz32_2))
 #define BPB_RootCluster         2
 #define BPB_FSInfo              1
 #define BPB_BackupBootSector    6
