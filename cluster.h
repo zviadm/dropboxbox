@@ -2,7 +2,6 @@
 #define __CLUSTER_H
 
 #include <stdint.h>
-
 #include "dbfat.h"
 
 // FAT Entry Constants

@@ -1,10 +1,11 @@
 #include <assert.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 
+#include "dbapi.h"
 #include "dbfat.h"
 #include "cluster.h"
 
@@ -42,11 +43,39 @@ uint8_t name_checksum(uint8_t *short_name) {
     return sum;
 }
 
+uint16_t get_wrt_date(uint32_t epoch) {
+    // TODO(zm): actually implement this
+    return 0b0000100010011110;
+}
+
+uint16_t get_wrt_time(uint32_t epoch) {
+    // TODO(zm): actually implement this
+    return 0;
+}
+
 uint32_t get_entry_size(struct EntryMetaData *metadata) {
     return (((metadata->name_chars + LONG_NAME_CHARS_PER_ENTRY - 1) / LONG_NAME_CHARS_PER_ENTRY) + 1) * DIR_ENTRY_SIZE;
 }
 
-void add_child_entry(struct DirEntry *dir_entry, struct EntryMetaData *metadata) {
+void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) {
+    uint8_t short_len;
+    if (metadata->name_chars < 12) {
+        short_len = metadata->name_chars;
+    } else {
+        short_len = 12;
+    }
+
+    for (uint8_t i = 0; i < short_len; i++) {
+        printf("metadata name: %d -- %x, %x\n", i, metadata->name[i], metadata->name[i] & 0xFF);
+        metadata->short_name[i] = toupper((uint8_t)(metadata->name[i] & 0xFF));
+    }
+    for (uint8_t i = short_len; i < 12; i++) {
+        metadata->short_name[i] = ' ';
+    }
+    metadata->name_checksum = name_checksum(metadata->short_name);
+}
+
+struct DirEntry * add_child_entry(struct DirEntry *dir_entry, struct EntryMetaData *metadata) {
     uint32_t entry_extra_size = get_entry_size(metadata);
     // extend dir_entry if necessary to accomodate for extra entry_extra_size bytes
     uint32_t last_cluster_size = (dir_entry->metadata.size % BYTES_PER_CLUSTER);
@@ -58,6 +87,7 @@ void add_child_entry(struct DirEntry *dir_entry, struct EntryMetaData *metadata)
 
     struct DirEntry *new_dir_entry = (struct DirEntry *)malloc(sizeof(struct DirEntry));
     memcpy(&new_dir_entry->metadata, metadata, sizeof(struct EntryMetaData));
+    set_short_name(dir_entry, &new_dir_entry->metadata);
 
     struct DirEntry *child = dir_entry->child;
     dir_entry->child = new_dir_entry;
@@ -68,6 +98,44 @@ void add_child_entry(struct DirEntry *dir_entry, struct EntryMetaData *metadata)
     
     // construct cluster chain
     new_dir_entry->first_cluster = allocate_cluster_chain(new_dir_entry, new_dir_entry->metadata.size);
+    return new_dir_entry;
+}
+
+void remove_child_entry(struct DirEntry *dir_entry, struct DirEntry *child_entry) {
+    if (child_entry->metadata.is_dir == 1) {
+        // recursively remove all subfolders/files
+        struct DirEntry *cc = child_entry->child;
+        while (cc != NULL) {
+            remove_child_entry(child_entry, cc);
+            cc = cc->next;
+        }
+    }
+    
+    // TODO(zm): maybe directory structure should be doubly-linked list?
+    if (dir_entry->child == child_entry) {
+       dir_entry->child = child_entry->next;
+    } else {
+        struct DirEntry *cc = dir_entry->child;
+        while (cc->next != child_entry) {
+            assert(cc != NULL);
+            cc = cc->next;
+        }
+        cc->next = child_entry->next;
+    }
+    free(child_entry);
+}
+
+struct DirEntry * get_child_entry(struct DirEntry *dir_entry, uint8_t name_chars, wchar *name) {
+    struct DirEntry *child_entry = dir_entry->child;
+    while (child_entry != NULL) {
+        if ((child_entry->metadata.name_chars == name_chars) &&
+            (memcmp(child_entry->metadata.name, name, name_chars * sizeof(wchar)) == 0)) {
+            return child_entry;
+        } else {
+            child_entry = child_entry->next;
+        }        
+    }
+    return NULL;
 }
 
 uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_entry, uint8_t *buf) {
@@ -303,21 +371,109 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
     return 0;
 }
 
+struct DirEntry * add_file_entry(uint32_t path_chars, wchar *path, struct DBMetaData *dbmetadata) {
+    assert(path[0] == L'/');
+    uint32_t path_last_index = 0;
+    uint32_t path_index = 1;
+
+    struct DirEntry *current_entry = ROOT_DIR_ENTRY;
+
+    while (path_index < path_chars) {
+        while ((path_index < path_chars) && (path[path_index] != L'/')) {
+            path_index += 1;
+        }
+        
+        // path:  path[0:path_last_index+1]
+        // entry: path[path_last_index+1:path_index]
+        uint8_t entry_name_chars = path_index - (path_last_index + 1);
+        wchar *entry_name = &path[path_last_index + 1];
+        struct DirEntry *child_entry = get_child_entry(current_entry, entry_name_chars, entry_name);
+
+        if (path_index == path_chars) {
+            if ((child_entry != NULL) && (child_entry->metadata.is_dir != dbmetadata->is_dir)) {
+                remove_child_entry(current_entry, child_entry);
+                child_entry = NULL;
+            }
+
+            if (child_entry == NULL) {
+                // if file or directory does not exist create new one
+                struct EntryMetaData metadata;
+                metadata.is_dir = dbmetadata->is_dir;
+                metadata.size = (dbmetadata->is_dir == 0) ? dbmetadata->size : 64;
+                metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
+                metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
+
+                metadata.name_chars = entry_name_chars;
+                metadata.name = (wchar *)malloc((entry_name_chars + 1) * sizeof(wchar));
+                swprintf(metadata.name, metadata.name_chars + 1, L"%ls", entry_name);
+                child_entry = add_child_entry(current_entry, &metadata);
+            } else {
+                // if file or directory already exists need to update metadata with new information
+                if (child_entry->metadata.is_dir == 0) {
+                    // for files need to update size and reallocate cluster chain
+                    child_entry->metadata.size = dbmetadata->size;
+                    child_entry->first_cluster = reallocate_cluster_chain(child_entry->first_cluster, child_entry->metadata.size);
+                } 
+                child_entry->metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
+                child_entry->metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
+            }
+        } else {
+            // need to make sure that all parent directories in "path" exist if not 
+            // as described in Dropbox Api "delta" protocol they must be created.
+            // also if there is a file instead of directory in given "path" the file needs
+            // to be removed.
+            if ((child_entry != NULL) && (child_entry->metadata.is_dir == 0)) {
+                remove_child_entry(current_entry, child_entry);
+                child_entry = NULL;
+            }
+
+            if (child_entry == NULL) {
+                struct EntryMetaData metadata;
+                metadata.is_dir = 1;
+                metadata.size = 64;
+                metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
+                metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
+
+                metadata.name_chars = entry_name_chars;
+                metadata.name = (wchar *)malloc((entry_name_chars + 1) * sizeof(wchar));
+                swprintf(metadata.name, metadata.name_chars + 1, L"%ls", entry_name);
+                child_entry = add_child_entry(current_entry, &metadata);
+            }
+        }
+
+        path_last_index = path_index;
+        path_index += 1;
+
+        current_entry = child_entry;
+    }
+    return current_entry;
+}
+
 void add_test_data() {
-    struct EntryMetaData metadata;
-    metadata.is_dir = 1;
-    metadata.size = 64;
+    struct DBMetaData t1 = {
+        .is_dir = 1,
+        .size = 0,
+        .mtime = 0,
+    };
+    add_file_entry(wcslen(L"/t1"), (wchar *)L"/t1", &t1);
 
-    metadata.DIR_WrtDate = 0b0000100010011110;
-    metadata.DIR_WrtTime = 0; 
+    struct DBMetaData t2 = {
+        .is_dir = 1,
+        .size = 0,
+        .mtime = 0,
+    };
+    add_file_entry(wcslen(L"/t1/t2"), (wchar *)L"/t1/t2", &t2);
+    //struct EntryMetaData metadata;
+    //metadata.is_dir = 1;
+    //metadata.size = 64;
 
-    metadata.name_chars = 5;
-    metadata.name = (wchar *)malloc((metadata.name_chars + 1) * sizeof(wchar));
-    swprintf(metadata.name, metadata.name_chars + 1, L"%ls", L"testy");
-    snprintf((char *)metadata.short_name, 12, "%s", "TESTY      ");
-    metadata.name_checksum = name_checksum(metadata.short_name);
+    //metadata.DIR_WrtDate = 0b0000100010011110;
+    //metadata.DIR_WrtTime = 0; 
 
-    add_child_entry(ROOT_DIR_ENTRY, &metadata);
+    //metadata.name_chars = 5;
+    //metadata.name = (wchar *)malloc((metadata.name_chars + 1) * sizeof(wchar));
+    //swprintf(metadata.name, metadata.name_chars + 1, L"%ls", L"testy");
+    //add_child_entry(ROOT_DIR_ENTRY, &metadata);
 }
 
 void create_test_image() {
