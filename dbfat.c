@@ -371,7 +371,7 @@ int main(int argv, char * argc[]) {
     metadata.name_chars = 5;
     metadata.name = (wchar *)malloc((metadata.name_chars + 1) * sizeof(wchar));
     swprintf(metadata.name, metadata.name_chars + 1, L"%ls", L"testy");
-    snprintf(metadata.short_name, 12, "%s", "TESTY      ");
+    snprintf((char *)metadata.short_name, 12, "%s", "TESTY      ");
     metadata.name_checksum = name_checksum(metadata.short_name);
 
     add_child_entry(ROOT_DIR_ENTRY, &metadata);
