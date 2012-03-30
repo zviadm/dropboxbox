@@ -27,13 +27,14 @@ struct DirEntry {
     struct EntryMetaData metadata;
 };
 
-// Directory Entries
-struct DirEntry **DIR_ENTRIES;
-struct DirEntry *ROOT_DIR_ENTRY;
+// Interface to read dbbox image
+int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
+void initialize();
+void cleanup();
 
-// FAT Entries
-uint32_t *FAT_ENTRIES;
-uint32_t LAST_FREE_ENTRY = 2;
+// functions for testing
+void add_test_data();
+void create_test_image();
 
 // FAT Entry Constants
 #define FAT_FREE_ENTRY  0x00000000
@@ -81,7 +82,7 @@ uint32_t LAST_FREE_ENTRY = 2;
 #define N_CLUSTERS              ((BPB_TotalSectors - (BPB_ReservedSectorCount + (2 * BPB_FATSz32))) / BPB_SectorsPerCluster)
 #define BYTES_PER_CLUSTER       (BPB_SectorsPerCluster * BPB_BytesPerSector)
 
-const uint8_t BOOT_SECTOR[512] = {
+static const uint8_t BOOT_SECTOR[512] = {
     0xEB, 0x00, 0x90,                       // BS_jmpBoot
     'M', 'S', 'W', 'I', 'N', '4', '.', '1', // BS_OEMName
 
@@ -222,7 +223,7 @@ const uint8_t BOOT_SECTOR[512] = {
     0x55, 0xAA,                             // BS_TrailSig
 };
 
-const uint8_t FS_INFO[512] = {
+static const uint8_t FS_INFO[512] = {
     0x52, 0x52, 0x61, 0x41,                 // FSI_LeadSig
     0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,

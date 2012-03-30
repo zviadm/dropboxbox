@@ -7,6 +7,14 @@
 
 #include "dbfat.h"
 
+// Directory Entries
+struct DirEntry **DIR_ENTRIES;
+struct DirEntry *ROOT_DIR_ENTRY;
+
+// FAT Entries
+uint32_t *FAT_ENTRIES;
+uint32_t LAST_FREE_ENTRY = 2;
+
 void initialize() {
     // BOOT_SECTOR Checks
     assert(BOOT_SECTOR[13] == BPB_SectorsPerCluster);
@@ -298,7 +306,7 @@ void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
         buf_offset += entry_size;
         child_entry = child_entry->next;
     }
-    printf("[DEBUG] Read Dir Sector: %d, %d, buf_offset: %d\n", dir_entry->first_cluster, offset, buf_offset);
+    printf("[DEBUG] Read Dir Sector: %u, %u, buf_offset: %u\n", dir_entry->first_cluster, offset, buf_offset);
     for (uint32_t i = 0; i < buf_offset; i += 32) {
 
     }
@@ -357,10 +365,46 @@ int read_sector(uint32_t sector, uint8_t *buf) {
     return 0;
 }
 
-int main(int argv, char * argc[]) {
-    initialize();
+int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
+    uint32_t sector = (offset / BPB_BytesPerSector);
+    uint32_t sector_index = offset - sector * BPB_BytesPerSector;
+    uint32_t buf_offset = 0;
 
-    // some randomass testing
+    uint8_t tmp_sector[BPB_BytesPerSector];
+    int r;
+    while (buf_offset < size) {
+        uint32_t sector_endindex = (offset + size) - (sector * BPB_BytesPerSector + sector_index);
+        assert(sector_endindex > sector_index);
+
+        uint32_t read_size;
+        if ((sector_endindex - sector_index) < BPB_BytesPerSector) {
+            read_size = sector_endindex - sector_index;
+        } else{
+            read_size = BPB_BytesPerSector;
+        }
+        
+        if ((sector_index == 0) && (read_size == BPB_BytesPerSector)) {
+            r = read_sector(sector, &buf[buf_offset]);
+            if (r) {
+                return r;
+            }
+        } else {
+            r = read_sector(sector, tmp_sector);
+            if (r) {
+                return r;
+            }
+            memcpy(&buf[buf_offset], &tmp_sector[sector_index], read_size);
+            sector_index = 0;
+        }
+        
+        sector += 1;
+        buf_offset += read_size;
+    }
+    assert(buf_offset == size);
+    return 0;
+}
+
+void add_test_data() {
     struct EntryMetaData metadata;
     metadata.is_dir = 1;
     metadata.size = 64;
@@ -375,7 +419,10 @@ int main(int argv, char * argc[]) {
     metadata.name_checksum = name_checksum(metadata.short_name);
 
     add_child_entry(ROOT_DIR_ENTRY, &metadata);
+}
 
+void create_test_image() {
+    // some randomass testing
     FILE *img_file = fopen("dbbox.img", "w");
     uint8_t sector_buf[BPB_BytesPerSector];
     for (uint32_t sector = 0; sector < BPB_TotalSectors; sector++) {
@@ -383,6 +430,5 @@ int main(int argv, char * argc[]) {
         fwrite(sector_buf, sizeof(uint8_t), BPB_BytesPerSector, img_file);
     }
     fclose(img_file);
-
-    cleanup();
 }
+

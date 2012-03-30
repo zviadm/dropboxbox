@@ -1,10 +1,10 @@
 CC=gcc
-CFLAGS=-std=c99 -g -Wall -O2
+CFLAGS=-std=c99 -g -Wall -O2 -D_FILE_OFFSET_BITS=64
 
-OBJS=dbfat.o
+OBJS=dbbox.o dbfat.o
 PROG=dbbox
-INCLUDES=
-LIBS= 
+INCLUDES=-I/usr/include/fuse
+LIBS=-pthread -lfuse -lrt -ldl
 
 .SUFFIXES:.c .o
 
