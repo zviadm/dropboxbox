@@ -101,6 +101,5 @@ int main(int argc, char *argv[])
     initialize();
 
     add_test_data();
-    create_test_image();
     return fuse_main(argc, argv, &dbbox_oper, NULL);
 }

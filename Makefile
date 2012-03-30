@@ -17,4 +17,4 @@ $(PROG):$(OBJS)
 	$(CC) $(CFLAGS) $(DFLAGS) $(OBJS) -o $@ $(LIBS)
 
 clean:
-	@rm -f *.o $(PROG) 
+	@rm -f *.o *.img $(PROG) 
