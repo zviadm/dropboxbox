@@ -28,17 +28,13 @@ struct DirEntry {
 };
 
 // Interface to read dbbox image
-int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
 void initialize();
 void cleanup();
+int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
 
 // functions for testing
 void add_test_data();
 void create_test_image();
-
-// FAT Entry Constants
-#define FAT_FREE_ENTRY  0x00000000
-#define FAT_EOFC_ENTRY  0x0FFFFFFF
 
 #define DIR_ENTRY_SIZE            32
 #define LONG_NAME_CHARS_PER_ENTRY 13

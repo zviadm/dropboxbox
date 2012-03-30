@@ -6,51 +6,24 @@
 #include <wchar.h>
 
 #include "dbfat.h"
+#include "cluster.h"
 
 // Directory Entries
-struct DirEntry **DIR_ENTRIES;
 struct DirEntry *ROOT_DIR_ENTRY;
 
-// FAT Entries
-uint32_t *FAT_ENTRIES;
-uint32_t LAST_FREE_ENTRY = 2;
-
 void initialize() {
-    // BOOT_SECTOR Checks
-    assert(BOOT_SECTOR[13] == BPB_SectorsPerCluster);
-    assert(BOOT_SECTOR[66] == 0x29);
-    assert(BOOT_SECTOR[510] == 0x55);
-    assert(BOOT_SECTOR[511] == 0xAA);
-
-    // FS_INFO Checks
-    assert(FS_INFO[510] == 0x55);
-    assert(FS_INFO[511] == 0xAA);
-
-    printf("Size of FAT in sectors: %u (%u Bytes)\n", BPB_FATSz32, BPB_FATSz32 * BPB_BytesPerSector);
-
-    FAT_ENTRIES = (uint32_t *)malloc(BPB_FATSz32 * BPB_BytesPerSector);
-    DIR_ENTRIES = (struct DirEntry **)malloc(N_CLUSTERS * sizeof(struct DirEntry *));
-    memset(FAT_ENTRIES, 0, BPB_FATSz32 * BPB_BytesPerSector);
-
-    // initialize cluster 0 and 1 fat entries
-    FAT_ENTRIES[0] = 0x0FFFFFF0;
-    FAT_ENTRIES[1] = 0x08FFFFFF;
-
-    // initialize root directory entry
+    // initialize DIR_ENTRIES and ROOT directory entry
     ROOT_DIR_ENTRY = (struct DirEntry *)malloc(sizeof(struct DirEntry));
     memset(ROOT_DIR_ENTRY, 0, sizeof(struct DirEntry));
     ROOT_DIR_ENTRY->first_cluster = BPB_RootCluster;
     ROOT_DIR_ENTRY->metadata.is_dir = 1;
-
-    // root directory fat entry
-    FAT_ENTRIES[BPB_RootCluster] = FAT_EOFC_ENTRY;
-    DIR_ENTRIES[BPB_RootCluster] = ROOT_DIR_ENTRY;
+    initialize_clusters(ROOT_DIR_ENTRY);
 }
 
 void cleanup() {
-    free(FAT_ENTRIES);
+    cleanup_clusters();
+    // TODO(zm): Recursively cleanup all directory entries starting from ROOT
 }
-
 
 /// name_checksum()
 ///     Returns an unsigned byte checksum computed on an unsigned byte
@@ -67,74 +40,6 @@ uint8_t name_checksum(uint8_t *short_name) {
         sum = ((sum & 1) ? 0x80 : 0) + (sum >> 1) + *short_name++;
     }
     return sum;
-}
-
-/// find_free_cluster()
-///     Finds available cluster by traversing through FAT_ENTRIES
-uint32_t find_free_cluster() {
-    for (uint32_t i = LAST_FREE_ENTRY; i < N_CLUSTERS; i++) {
-        if (FAT_ENTRIES[i] == FAT_FREE_ENTRY) {
-            LAST_FREE_ENTRY = i;
-            return i;
-        }
-    }
-    for (uint32_t i = 2; i < LAST_FREE_ENTRY; i++) {
-        if (FAT_ENTRIES[i] == FAT_FREE_ENTRY) {
-            LAST_FREE_ENTRY = i;
-            return i;
-        }
-    }
-    return 0xFFFFFFFF;
-}
-
-uint32_t allocate_cluster_chain(struct DirEntry *dir_entry, uint32_t size) {
-    uint32_t first_cluster = find_free_cluster();
-    uint32_t current_size = BYTES_PER_CLUSTER;
-
-    uint32_t next_cluster = first_cluster;
-    while (current_size < size) {
-        FAT_ENTRIES[next_cluster] = find_free_cluster();
-        DIR_ENTRIES[next_cluster] = dir_entry;
-        next_cluster = FAT_ENTRIES[next_cluster];
-        current_size += BYTES_PER_CLUSTER;
-    }
-    FAT_ENTRIES[next_cluster] = FAT_EOFC_ENTRY;
-    DIR_ENTRIES[next_cluster] = dir_entry;
-    return first_cluster;
-}
-
-uint32_t reallocate_cluster_chain(uint32_t first_cluster, uint32_t new_size) {
-    uint32_t next_cluster = first_cluster;
-    uint32_t current_size = BYTES_PER_CLUSTER;
-
-    uint8_t extending = 0;
-
-    while (current_size < new_size) {
-        if (FAT_ENTRIES[next_cluster] == FAT_EOFC_ENTRY) {
-            // new size is larger than previous so extend the cluster
-            extending = 1;
-        } 
-        if (extending == 1) {
-            FAT_ENTRIES[next_cluster] = find_free_cluster();
-            DIR_ENTRIES[next_cluster] = DIR_ENTRIES[first_cluster];
-        }
-
-        next_cluster = FAT_ENTRIES[next_cluster];
-        current_size += BYTES_PER_CLUSTER;
-    }
-    if (extending == 0) {
-        // free clusters since we have shrunk current chain
-        uint32_t tmp_cluster = next_cluster;
-        while (FAT_ENTRIES[tmp_cluster] != FAT_EOFC_ENTRY) {
-            uint32_t tmp = tmp_cluster;
-            tmp_cluster = FAT_ENTRIES[tmp];
-            FAT_ENTRIES[tmp] = FAT_FREE_ENTRY;
-        }
-    }
-    
-    FAT_ENTRIES[next_cluster] = FAT_EOFC_ENTRY;
-    DIR_ENTRIES[next_cluster] = DIR_ENTRIES[first_cluster];
-    return first_cluster;
 }
 
 uint32_t get_entry_size(struct EntryMetaData *metadata) {
@@ -323,6 +228,7 @@ int read_sector(uint32_t sector, uint8_t *buf) {
         } else {
             memset(buf, 0, BPB_BytesPerSector);
         }
+        return 0;
     } else if (sector < (BPB_ReservedSectorCount + 2 * BPB_FATSz32)) {
         // Handle FAT Region
         uint32_t fat_sector;
@@ -332,28 +238,21 @@ int read_sector(uint32_t sector, uint8_t *buf) {
             fat_sector = sector - BPB_ReservedSectorCount - BPB_FATSz32;
         }
 
-        memcpy(buf, &FAT_ENTRIES[fat_sector * BPB_BytesPerSector / sizeof(uint32_t)], BPB_BytesPerSector);
+        return read_fat_sector(fat_sector, buf);
     } else {
         // Handle Data Region
         uint32_t cluster_n = 2 + 
             (sector - (BPB_ReservedSectorCount + 2 * BPB_FATSz32)) / BPB_SectorsPerCluster;
 
-        if (FAT_ENTRIES[cluster_n] == FAT_FREE_ENTRY) {
+        if (is_cluster_free(cluster_n)) {
             memset(buf, 0, BPB_BytesPerSector);
         } else {
-            printf("WHATSUP?\n");
             // Get DirEntry and offset of sector
-            struct DirEntry *dir_entry = DIR_ENTRIES[cluster_n];
-            uint32_t offset = 0;
-
-            uint32_t first_cluster = dir_entry->first_cluster; 
-            while (first_cluster != cluster_n) {
-                first_cluster = FAT_ENTRIES[first_cluster];
-                offset += BPB_SectorsPerCluster * BPB_BytesPerSector;
-            }
-            offset += (sector - ((cluster_n - 2) * BPB_SectorsPerCluster + (BPB_ReservedSectorCount + 2 * BPB_FATSz32))) *
-                BPB_BytesPerSector;
-            printf("WW: %u, %u, offset: %u\n", sector, dir_entry->first_cluster, offset);
+            struct DirEntry *dir_entry = 
+                get_cluster_dir_entry(cluster_n);
+            uint32_t offset = 
+                get_cluster_chain_size(dir_entry->first_cluster, cluster_n) + 
+                (sector - ((cluster_n - 2) * BPB_SectorsPerCluster + (BPB_ReservedSectorCount + 2 * BPB_FATSz32))) * BPB_BytesPerSector;
 
             if (dir_entry->metadata.is_dir) {
                 read_dir_sector(dir_entry, offset, buf);
@@ -361,8 +260,8 @@ int read_sector(uint32_t sector, uint8_t *buf) {
                 memset(buf, 0, BPB_BytesPerSector);
             }
         }
+        return 0;
     }
-    return 0;
 }
 
 int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {

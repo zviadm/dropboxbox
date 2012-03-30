@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-std=c99 -g -Wall -O2 -D_FILE_OFFSET_BITS=64
 
-OBJS=dbbox.o dbfat.o
+OBJS=dbbox.o dbfat.o cluster.o
 PROG=dbbox
 INCLUDES=-I/usr/include/fuse
 LIBS=-pthread -lfuse -lrt -ldl
