@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <wchar.h>
 
-typedef wchar_t wchar;
+typedef uint16_t utf16_t;
 
 struct EntryMetaData {
     uint32_t size;
@@ -15,7 +15,7 @@ struct EntryMetaData {
     uint8_t name_chars;
     uint8_t name_checksum;
     uint8_t short_name[12];
-    wchar *name;
+    utf16_t *name;
 };
 
 struct DirEntry {
@@ -34,10 +34,10 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
 
 // functions for testing
 void add_test_data();
-void create_test_image();
 
 #define DIR_ENTRY_SIZE            32
 #define LONG_NAME_CHARS_PER_ENTRY 13
+#define PATH_SEPARATOR            0x002F
 
 // File Attributes
 #define ATTR_READ_ONLY 0x01
@@ -55,7 +55,7 @@ void create_test_image();
 
 // BootSector and FSInfo constants
 #define UINT16_TOARRAY(x) \
-    ((x) & 0xFF), (((x) >> 8) & 0xFF)
+    ((x) & 0xFF),      (((x) >> 8) & 0xFF)
 
 #define UINT24_TOARRAY(x) \
     UINT16_TOARRAY(x), (((x) >> 16) & 0xFF)

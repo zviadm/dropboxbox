@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <ctype.h>
+#include <iconv.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -122,14 +123,15 @@ void remove_child_entry(struct DirEntry *dir_entry, struct DirEntry *child_entry
         }
         cc->next = child_entry->next;
     }
+    free(child_entry->metadata.name);
     free(child_entry);
 }
 
-struct DirEntry * get_child_entry(struct DirEntry *dir_entry, uint8_t name_chars, wchar *name) {
+struct DirEntry * get_child_entry(struct DirEntry *dir_entry, uint8_t name_chars, utf16_t *name) {
     struct DirEntry *child_entry = dir_entry->child;
     while (child_entry != NULL) {
         if ((child_entry->metadata.name_chars == name_chars) &&
-            (memcmp(child_entry->metadata.name, name, name_chars * sizeof(wchar)) == 0)) {
+            (memcmp(child_entry->metadata.name, name, name_chars * sizeof(utf16_t)) == 0)) {
             return child_entry;
         } else {
             child_entry = child_entry->next;
@@ -143,7 +145,7 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
     uint8_t name_offset = (long_entries - 1) * LONG_NAME_CHARS_PER_ENTRY;
     uint32_t buf_offset = 0;
 
-    wchar wll[LONG_NAME_CHARS_PER_ENTRY] = { 
+    utf16_t wll[LONG_NAME_CHARS_PER_ENTRY] = { 
         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 
         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
@@ -187,7 +189,7 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
         
         name_offset -= LONG_NAME_CHARS_PER_ENTRY;
         if (name_offset >= 0) {
-            memcpy(wll, &child_entry->metadata.name[name_offset], LONG_NAME_CHARS_PER_ENTRY * sizeof(wchar));
+            memcpy(wll, &child_entry->metadata.name[name_offset], LONG_NAME_CHARS_PER_ENTRY * sizeof(utf16_t));
         }
     }
 
@@ -371,22 +373,22 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
     return 0;
 }
 
-struct DirEntry * add_file_entry(uint32_t path_chars, wchar *path, struct DBMetaData *dbmetadata) {
-    assert(path[0] == L'/');
+struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMetaData *dbmetadata) {
+    assert(path[0] == PATH_SEPARATOR);
     uint32_t path_last_index = 0;
     uint32_t path_index = 1;
 
     struct DirEntry *current_entry = ROOT_DIR_ENTRY;
 
     while (path_index < path_chars) {
-        while ((path_index < path_chars) && (path[path_index] != L'/')) {
+        while ((path_index < path_chars) && (path[path_index] != PATH_SEPARATOR)) {
             path_index += 1;
         }
         
         // path:  path[0:path_last_index+1]
         // entry: path[path_last_index+1:path_index]
         uint8_t entry_name_chars = path_index - (path_last_index + 1);
-        wchar *entry_name = &path[path_last_index + 1];
+        utf16_t *entry_name = &path[path_last_index + 1];
         struct DirEntry *child_entry = get_child_entry(current_entry, entry_name_chars, entry_name);
 
         if (path_index == path_chars) {
@@ -404,8 +406,9 @@ struct DirEntry * add_file_entry(uint32_t path_chars, wchar *path, struct DBMeta
                 metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
 
                 metadata.name_chars = entry_name_chars;
-                metadata.name = (wchar *)malloc((entry_name_chars + 1) * sizeof(wchar));
-                swprintf(metadata.name, metadata.name_chars + 1, L"%ls", entry_name);
+                metadata.name = (utf16_t *)malloc(entry_name_chars * sizeof(utf16_t));
+                memcpy(metadata.name, entry_name, entry_name_chars * sizeof(utf16_t));
+
                 child_entry = add_child_entry(current_entry, &metadata);
             } else {
                 // if file or directory already exists need to update metadata with new information
@@ -435,8 +438,9 @@ struct DirEntry * add_file_entry(uint32_t path_chars, wchar *path, struct DBMeta
                 metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
 
                 metadata.name_chars = entry_name_chars;
-                metadata.name = (wchar *)malloc((entry_name_chars + 1) * sizeof(wchar));
-                swprintf(metadata.name, metadata.name_chars + 1, L"%ls", entry_name);
+                metadata.name = (utf16_t *)malloc((entry_name_chars + 1) * sizeof(utf16_t));
+                memcpy(metadata.name, entry_name, entry_name_chars * sizeof(utf16_t));
+
                 child_entry = add_child_entry(current_entry, &metadata);
             }
         }
@@ -449,41 +453,73 @@ struct DirEntry * add_file_entry(uint32_t path_chars, wchar *path, struct DBMeta
     return current_entry;
 }
 
-void add_test_data() {
-    struct DBMetaData t1 = {
-        .is_dir = 1,
-        .size = 0,
-        .mtime = 0,
-    };
-    add_file_entry(wcslen(L"/t1"), (wchar *)L"/t1", &t1);
+void remove_file_entry(uint32_t path_chars, utf16_t *path) {
+    assert(path[0] == PATH_SEPARATOR);
+    uint32_t path_last_index = 0;
+    uint32_t path_index = 1;
 
-    struct DBMetaData t2 = {
-        .is_dir = 1,
-        .size = 0,
-        .mtime = 0,
-    };
-    add_file_entry(wcslen(L"/t1/t2"), (wchar *)L"/t1/t2", &t2);
-    //struct EntryMetaData metadata;
-    //metadata.is_dir = 1;
-    //metadata.size = 64;
+    struct DirEntry *current_entry = ROOT_DIR_ENTRY;
 
-    //metadata.DIR_WrtDate = 0b0000100010011110;
-    //metadata.DIR_WrtTime = 0; 
+    while (path_index < path_chars) {
+        while ((path_index < path_chars) && (path[path_index] != PATH_SEPARATOR)) {
+            path_index += 1;
+        }
 
-    //metadata.name_chars = 5;
-    //metadata.name = (wchar *)malloc((metadata.name_chars + 1) * sizeof(wchar));
-    //swprintf(metadata.name, metadata.name_chars + 1, L"%ls", L"testy");
-    //add_child_entry(ROOT_DIR_ENTRY, &metadata);
+        // path:  path[0:path_last_index+1]
+        // entry: path[path_last_index+1:path_index]
+        uint8_t entry_name_chars = path_index - (path_last_index + 1);
+        utf16_t *entry_name = &path[path_last_index + 1];
+        struct DirEntry *child_entry = get_child_entry(current_entry, entry_name_chars, entry_name);
+
+        if ((child_entry == NULL) || (path_index < path_chars && child_entry->metadata.is_dir == 0)) {
+            return;
+        }
+
+        if (path_index == path_chars) {
+            remove_child_entry(current_entry, child_entry);
+        }
+        current_entry = child_entry;
+    }
 }
 
-void create_test_image() {
-    // some randomass testing
-    FILE *img_file = fopen("dbbox.img", "w");
-    uint8_t sector_buf[BPB_BytesPerSector];
-    for (uint32_t sector = 0; sector < BPB_TotalSectors; sector++) {
-        read_sector(sector, sector_buf);
-        fwrite(sector_buf, sizeof(uint8_t), BPB_BytesPerSector, img_file);
-    }
-    fclose(img_file);
+void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_t **utf16string) {
+    const size_t BUF_SIZE = 64 * 1024;
+    char OUTBUF[BUF_SIZE];
+    char *outbuf = OUTBUF;
+    size_t inbytesleft = utf8size;
+    size_t outbytesleft = BUF_SIZE;
+
+    iconv_t utf8_to_utf16 = iconv_open("UTF16LE", "UTF8");
+    size_t r = iconv(utf8_to_utf16, &utf8string, &inbytesleft, &outbuf, &outbytesleft);
+    assert(r != (size_t) -1);
+    assert(inbytesleft == 0);
+
+    assert(((BUF_SIZE - outbytesleft) % sizeof(utf16_t)) == 0);
+    *utf16chars = (BUF_SIZE - outbytesleft) / sizeof(utf16_t);
+    *utf16string = (utf16_t *)malloc((*utf16chars) * sizeof(utf16_t));
+    memcpy(*utf16string, OUTBUF, (*utf16chars) * sizeof(utf16_t));
+
+    iconv_close(utf8_to_utf16);
+}
+
+void add_test_file(char *path, uint8_t is_dir, uint32_t size, uint32_t mtime) {
+    struct DBMetaData metadata = {
+        .is_dir = is_dir,
+        .size   = size,
+        .mtime  = mtime,
+    };
+
+    utf16_t *utf16path;
+    size_t utf16path_chars;
+    utf8_to_utf16(strlen(path), path, &utf16path_chars, &utf16path);
+    add_file_entry(utf16path_chars, utf16path, &metadata);
+    free(utf16path);
+}
+
+void add_test_data() {
+    add_test_file("/t1", 1, 0, 0);
+    add_test_file("/t1/t2", 1, 0, 0);
+    add_test_file("/t1/t2/t3", 0, 100, 0);
+    add_test_file("/ttt1/ttt2/ttt3", 0, 1000, 0);
 }
 

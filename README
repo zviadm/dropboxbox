@@ -1,6 +1,6 @@
+sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libfuse-dev
 sudo apt-get install libgsl0-dev
 
-sudo ./dbbox /tmp/dbbox -d
-sudo mount /tmp/dbbox/dbbox.img /tmp/dbbox.img -t msdos -o loop,ro,noexec
-
+make
+sudo ./mount_dbbox.sh

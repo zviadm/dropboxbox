@@ -1,5 +1,4 @@
-*.img
-*.o
+obj/
 *.swp
 dbbox
 
