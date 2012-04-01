@@ -86,6 +86,7 @@ void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) 
     while (metadata->name[long_index] == PATH_DOT && long_index < metadata->name_chars) {
         long_index++;
     }
+    const uint32_t long_index_start = long_index;
 
     _short_name_helper(metadata, &short_index, &long_index, 6);
 
@@ -100,15 +101,14 @@ void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) 
     }
 
     long_index = metadata->name_chars;
-    while (long_index > 0) {
-        if (metadata->name[long_index - 1] == PATH_DOT) {
+    while (long_index > long_index_start) {
+        long_index--;
+        if (metadata->name[long_index] == PATH_DOT) {
+            _short_name_helper(metadata, &short_index, &long_index, 11);
             break;
         }
-        long_index--;
     }
-    if (long_index > 0) {
-        _short_name_helper(metadata, &short_index, &long_index, 11);
-    }
+
     while (short_index < 11) {
         metadata->short_name[short_index] = PATH_SPACE;
         short_index++;
