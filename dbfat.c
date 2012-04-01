@@ -57,21 +57,65 @@ uint32_t get_entry_size(struct EntryMetaData *metadata) {
     return (((metadata->name_chars + LONG_NAME_CHARS_PER_ENTRY - 1) / LONG_NAME_CHARS_PER_ENTRY) + 1) * DIR_ENTRY_SIZE;
 }
 
+void _short_name_helper(struct EntryMetaData *metadata, uint32_t *short_index, uint32_t *long_index, uint8_t max_short_index) {
+    while ((*short_index < max_short_index) && (*long_index < metadata->name_chars)) {
+        if (metadata->name[*long_index] == PATH_DOT) {
+            break;
+        }
+        if (metadata->name[*long_index] == PATH_SPACE) {
+            (*long_index)++;
+            continue;
+        }
+        
+        if (metadata->name[*long_index] <= 0x7F) {
+            // ascii character
+            metadata->short_name[*short_index] = toupper((uint8_t)(metadata->name[*long_index] & 0x7F));
+        } else {
+            metadata->short_name[*short_index] = PATH_UNDERSCORE;
+        }
+        (*short_index)++;
+        (*long_index)++;
+    }
+}
+
 void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) {
-    uint8_t short_len;
-    if (metadata->name_chars < 12) {
-        short_len = metadata->name_chars;
-    } else {
-        short_len = 12;
+    // TODO(zm): write an actual function for generating short names
+    uint32_t short_index = 0;
+    uint32_t long_index = 0;
+        
+    while (metadata->name[long_index] == PATH_DOT && long_index < metadata->name_chars) {
+        long_index++;
     }
 
-    for (uint8_t i = 0; i < short_len; i++) {
-        printf("metadata name: %d -- %x, %x\n", i, metadata->name[i], metadata->name[i] & 0xFF);
-        metadata->short_name[i] = toupper((uint8_t)(metadata->name[i] & 0xFF));
+    _short_name_helper(metadata, &short_index, &long_index, 6);
+
+    metadata->short_name[short_index] = PATH_TILDA;
+    short_index++;
+    metadata->short_name[short_index] = '1';
+    short_index++;
+
+    while (short_index < 8) {
+        metadata->short_name[short_index] = PATH_SPACE;
+        short_index++;
     }
-    for (uint8_t i = short_len; i < 12; i++) {
-        metadata->short_name[i] = ' ';
+
+    long_index = metadata->name_chars;
+    while (long_index > 0) {
+        if (metadata->name[long_index - 1] == PATH_DOT) {
+            break;
+        }
+        long_index--;
     }
+    if (long_index > 0) {
+        _short_name_helper(metadata, &short_index, &long_index, 11);
+    }
+    while (short_index < 11) {
+        metadata->short_name[short_index] = PATH_SPACE;
+        short_index++;
+    }
+
+    printf("[DEBUG] Generated Short Name: %.11s\n", metadata->short_name);
+
     metadata->name_checksum = name_checksum(metadata->short_name);
 }
 

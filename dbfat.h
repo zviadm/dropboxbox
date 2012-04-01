@@ -14,7 +14,7 @@ struct EntryMetaData {
     uint8_t is_dir;
     uint8_t name_chars;
     uint8_t name_checksum;
-    uint8_t short_name[12];
+    uint8_t short_name[11];
     utf16_t *name;
 };
 
@@ -48,7 +48,13 @@ void add_test_data();
 
 #define DIR_ENTRY_SIZE            32
 #define LONG_NAME_CHARS_PER_ENTRY 13
-#define PATH_SEPARATOR            0x002F
+
+// special PATH characters
+#define PATH_DOT        '.'
+#define PATH_SEPARATOR  '/'
+#define PATH_SPACE      ' '       
+#define PATH_TILDA      '~'
+#define PATH_UNDERSCORE '_'
 
 // File Attributes
 #define ATTR_READ_ONLY 0x01
