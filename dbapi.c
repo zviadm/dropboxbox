@@ -2,11 +2,13 @@
 #include <curl/curl.h>
 #include <iconv.h>
 #include <oauth.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "dbapi.h"
 #include "dbfat.h"
@@ -27,7 +29,7 @@ char *URL_DELTA = "https://api.dropbox.com/1/delta";
 const long int HTTP_OK = 200;
 
 CURL *dbapi_curl   = NULL;
-char *dbapi_cursor = "";
+char *dbapi_cursor = NULL;
 
 void curl_base_setup(CURL *curl) {
     curl_easy_reset(curl);
@@ -38,56 +40,25 @@ void curl_base_setup(CURL *curl) {
 
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, REQUEST_TIMEOUT);
 }
-//
-//void get_oauth_header(char *url, char *method, char *postparams, ) {
-//    const char *consumer_key_prefix = "&oauth_consumer_key=";
-//    const char *token_prefix        = "&oauth_token=";
-//    const char *timestamp_prefix    = "&oauth_timestamp=";
-//    const char *nonce_prefix        = "&oauth_nonce=";
-//    const char *version             = "&oauth_version=1.0";
-//   
-//    char *timestamp = (char *)malloc(16);
-//    sprintf(timestamp, "%ld", time(NULL));
-//    char *nonce = oauth_gen_nonce();
-//    char *oauth_params = (char *)malloc(
-//            strlen(postdata)            +
-//            strlen(consumer_key_prefix) + strlen(CONSUMER_KEY) +
-//            strlen(token_prefix)        + strlen(TOKEN_KEY)    +
-//            strlen(timestamp_prefix)    + strlen(timestamp)    +
-//            strlen(nonce_prefix)        + strlen(nonce)        +
-//            strlen(version)             +
-//            1);
-//    sprintf(oauth_params, "%s%s%s%s%s%s%s%s%s%s", 
-//            postdata,
-//            consumer_key_prefix, CONSUMER_KEY,
-//            token_prefix       , TOKEN_KEY,
-//            timestamp_prefix   , timestamp,
-//            nonce_prefix       , nonce,
-//            version);
-//
-//    char *signed_params = oauth_params;
-//    oauth_sign_url2(url, &signed_params, OA_HMAC, method, CONSUMER_KEY, CONSUMER_SECRET, TOKEN_KEY, TOKEN_SECRET);
-//
-//    free(timestamp);
-//    free(nonce);
-//    free(oauth_params);
-//}
-//
+
 CURLcode dbapi_post_request(CURL *curl, char* url, char *postargs, long int *http_status, cJSON **result) {
     const char *locale = "&locale=en";
-    char *postargs2 = (char *)malloc(strlen(postargs) + strlen(locale) + 1);
-    sprintf(postargs2, "%s%s", postargs, locale);
+    char *posturl = (char *)malloc(strlen(url) + strlen(postargs) + strlen(locale) + 2);
+    sprintf(posturl, "%s?%s%s", url, postargs, locale);
 
-    char *signed_postargs = postargs2;
-    char *signed_url = oauth_sign_url2(url, &signed_postargs, OA_HMAC, "POST", CONSUMER_KEY, CONSUMER_SECRET, TOKEN_KEY, TOKEN_SECRET);
+    char *signed_postargs = NULL;
+    char *signed_url = oauth_sign_url2(posturl, &signed_postargs, OA_HMAC, "POST", CONSUMER_KEY, CONSUMER_SECRET, TOKEN_KEY, TOKEN_SECRET);
+    assert(signed_url);
+    assert(signed_postargs);
 
     curl_base_setup(curl);
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_URL, signed_url);
     curl_easy_setopt(curl, CURLOPT_POST, 1);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, signed_postargs);
 
     *http_status = 0;
     *result = NULL;
+    printf("[DEBUG] DBApi POST request, signed_url: %s, signed_args: %s\n", signed_url, signed_postargs);
 
     char *response_buffer = NULL;
     size_t response_size  = 0;
@@ -98,8 +69,8 @@ CURLcode dbapi_post_request(CURL *curl, char* url, char *postargs, long int *htt
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_status);
         if (*http_status == HTTP_OK) {
             fflush(response_file);
-            printf("[DEBUG] DBApi POST request succeeded, response size: %zu bytes, response:\n%s\n", response_size, response_buffer);
 	        *result = cJSON_Parse(response_buffer);
+            printf("[DEBUG] DBApi POST request succeeded, response size: %zu bytes, response:\n%s\n", response_size, response_buffer);
         } else {
             printf("[ERROR] DBApi POST request failed, http status code: %ld\n", *http_status);
         }
@@ -110,7 +81,7 @@ CURLcode dbapi_post_request(CURL *curl, char* url, char *postargs, long int *htt
 
     fclose(response_file);
     free(response_buffer);
-    free(postargs2);
+    free(posturl);
     if (signed_postargs) free(signed_postargs);
     if (signed_url) free(signed_url);
     return ret;
@@ -125,11 +96,18 @@ CURLcode dbapi_delta(CURL *curl, char *cursor, long int *http_status, cJSON **re
     return ret;
 }
 
-void dbapi_update() {
+void update_cursor(char *new_cursor) {
+    size_t cursor_length = strlen(new_cursor) + 1;
+    dbapi_cursor = realloc(dbapi_cursor, cursor_length + 1);
+    memcpy(dbapi_cursor, new_cursor, cursor_length);
+}
+
+int dbapi_update() {
     long int http_status;
     cJSON *result;
     CURLcode ret = dbapi_delta(dbapi_curl, dbapi_cursor, &http_status, &result);
 
+    int update_more = 0;
     if (result) {
         assert(ret == CURLE_OK);
         assert(http_status == HTTP_OK);
@@ -139,7 +117,12 @@ void dbapi_update() {
         char *new_cursor = cJSON_GetObjectItem(result, "cursor")->valuestring;
 
         if (reset) {
-            // TODO(zm): remove all files and reset state
+            // remove all file entries from local state
+            remove_all_file_entries();
+        }
+
+        if (has_more) {
+            update_more = 1;
         }
 
         cJSON *entries = cJSON_GetObjectItem(result, "entries");
@@ -156,7 +139,7 @@ void dbapi_update() {
             size_t utf16path_chars;
             utf8_to_utf16(strlen(path), path, &utf16path_chars, &utf16path);
 
-            if (metadata) {
+            if (metadata->type == cJSON_Object) {
                 struct DBMetaData dbmetadata;
                 dbmetadata.is_dir = (uint8_t)cJSON_GetObjectItem(metadata, "is_dir")->valueint;
                 dbmetadata.mtime = (uint32_t)cJSON_GetObjectItem(metadata, "modified")->valuedouble;
@@ -179,14 +162,50 @@ void dbapi_update() {
 
             free(utf16path);
         }
+
+        // update the dbapi_cursor
+        update_cursor(new_cursor);
+
+        cJSON_Delete(result);
+    } else {
+        update_more = 2;
     }
 
-    cJSON_Delete(result);
+    return update_more;
+}
+
+void *dbapi_thread(void *args) {
+    curl_global_init(CURL_GLOBAL_ALL);
+    dbapi_curl = curl_easy_init();
+    dbapi_cursor = calloc(1, sizeof(char));
+
+    CONSUMER_KEY    = CONSUMER_KEY_APP_FOLDER;
+    CONSUMER_SECRET = CONSUMER_SECRET_APP_FOLDER;
+    
+    while (1) {
+        int update_more = dbapi_update();
+        switch (update_more) {
+            case 0:
+            case 2:
+                sleep(10);
+                break;
+        }
+    }
+}
+
+void start_dbapi_thread() {
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+    pthread_t thread;
+    pthread_create(&thread, &attr, dbapi_thread, NULL);
 }
 
 void dbapi_test() {
     curl_global_init(CURL_GLOBAL_ALL);
     dbapi_curl = curl_easy_init();
+    dbapi_cursor = calloc(1, sizeof(char));
 
     CONSUMER_KEY    = CONSUMER_KEY_APP_FOLDER;
     CONSUMER_SECRET = CONSUMER_SECRET_APP_FOLDER;

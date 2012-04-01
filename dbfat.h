@@ -40,6 +40,7 @@ void cleanup();
 int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
 struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMetaData *dbmetadata);
 void remove_file_entry(uint32_t path_chars, utf16_t *path);
+void remove_all_file_entries();
 
 void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_t **utf16string);
 

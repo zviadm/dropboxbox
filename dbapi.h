@@ -3,5 +3,7 @@
 
 #include <stdint.h>
 
+void start_dbapi_thread();
 void dbapi_test(); 
+
 #endif
