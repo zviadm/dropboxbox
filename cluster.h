@@ -16,6 +16,7 @@ int is_cluster_free(uint32_t cluster);
 
 uint32_t allocate_cluster_chain(struct DirEntry *dir_entry, uint32_t size);
 uint32_t reallocate_cluster_chain(uint32_t first_cluster, uint32_t new_size);
+void free_cluster_chain(uint32_t first_cluster);
 uint32_t get_cluster_chain_size(uint32_t first_cluster, uint32_t last_cluster);
 
 struct DirEntry * get_cluster_dir_entry(uint32_t cluster);

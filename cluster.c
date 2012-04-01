@@ -104,17 +104,21 @@ uint32_t reallocate_cluster_chain(uint32_t first_cluster, uint32_t new_size) {
     }
     if (extending == 0) {
         // free clusters since we have shrunk current chain
-        uint32_t tmp_cluster = next_cluster;
-        while (FAT_ENTRIES[tmp_cluster] != FAT_EOFC_ENTRY) {
-            uint32_t tmp = tmp_cluster;
-            tmp_cluster = FAT_ENTRIES[tmp];
-            FAT_ENTRIES[tmp] = FAT_FREE_ENTRY;
-        }
+        free_cluster_chain(next_cluster);
     }
     
     FAT_ENTRIES[next_cluster] = FAT_EOFC_ENTRY;
     DIR_ENTRIES[next_cluster] = DIR_ENTRIES[first_cluster];
     return first_cluster;
+}
+
+void free_cluster_chain(uint32_t first_cluster) {
+    uint32_t next_cluster = first_cluster;
+    do {
+        uint32_t tmp = next_cluster;
+        next_cluster = FAT_ENTRIES[tmp];
+        FAT_ENTRIES[tmp] = FAT_FREE_ENTRY;
+    } while (next_cluster != FAT_EOFC_ENTRY);
 }
 
 uint32_t get_cluster_chain_size(uint32_t first_cluster, uint32_t last_cluster) {

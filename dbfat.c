@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dbapi.h"
 #include "dbfat.h"
 #include "cluster.h"
 
@@ -123,6 +122,7 @@ void remove_child_entry(struct DirEntry *dir_entry, struct DirEntry *child_entry
         }
         cc->next = child_entry->next;
     }
+    free_cluster_chain(child_entry->first_cluster);
     free(child_entry->metadata.name);
     free(child_entry);
 }
@@ -498,7 +498,6 @@ void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_
     *utf16chars = (BUF_SIZE - outbytesleft) / sizeof(utf16_t);
     *utf16string = (utf16_t *)malloc((*utf16chars) * sizeof(utf16_t));
     memcpy(*utf16string, OUTBUF, (*utf16chars) * sizeof(utf16_t));
-
     iconv_close(utf8_to_utf16);
 }
 

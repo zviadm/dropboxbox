@@ -27,10 +27,21 @@ struct DirEntry {
     struct EntryMetaData metadata;
 };
 
+struct DBMetaData {
+    uint32_t size;
+    uint32_t mtime;
+    uint8_t is_dir;
+    // TODO(zm): add rev
+};
+
 // Interface to read dbbox image
 void initialize();
 void cleanup();
 int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
+struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMetaData *dbmetadata);
+void remove_file_entry(uint32_t path_chars, utf16_t *path);
+
+void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_t **utf16string);
 
 // functions for testing
 void add_test_data();
@@ -77,6 +88,8 @@ void add_test_data();
 
 #define N_CLUSTERS              ((BPB_TotalSectors - (BPB_ReservedSectorCount + (2 * BPB_FATSz32))) / BPB_SectorsPerCluster)
 #define BYTES_PER_CLUSTER       (BPB_SectorsPerCluster * BPB_BytesPerSector)
+
+#define FAT_MAX_FILE_SIZE       0xFFFFFFFF
 
 static const uint8_t BOOT_SECTOR[512] = {
     0xEB, 0x00, 0x90,                       // BS_jmpBoot

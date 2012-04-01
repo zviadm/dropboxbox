@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "dbapi.h"
 #include "dbfat.h"
 
 const char *DBBOX_PATH = "/dbbox.img";
@@ -99,7 +100,6 @@ static struct fuse_operations dbbox_oper = {
 int main(int argc, char *argv[])
 {
     initialize();
-
-    add_test_data();
+    dbapi_test();
     return fuse_main(argc, argv, &dbbox_oper, NULL);
 }
