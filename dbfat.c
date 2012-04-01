@@ -79,7 +79,7 @@ void _short_name_helper(struct EntryMetaData *metadata, uint32_t *short_index, u
 }
 
 void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) {
-    // TODO(zm): write an actual function for generating short names
+    // TODO(zm): handle conflicts in short names...
     uint32_t short_index = 0;
     uint32_t long_index = 0;
         
