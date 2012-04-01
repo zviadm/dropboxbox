@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <iconv.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 
 // Directory Entries
 struct DirEntry *ROOT_DIR_ENTRY;
+pthread_rwlock_t dbfat_rwlock;
 
 void initialize() {
     // initialize DIR_ENTRIES and ROOT directory entry
@@ -19,11 +21,14 @@ void initialize() {
     ROOT_DIR_ENTRY->first_cluster = BPB_RootCluster;
     ROOT_DIR_ENTRY->metadata.is_dir = 1;
     initialize_clusters(ROOT_DIR_ENTRY);
+
+    pthread_rwlock_init(&dbfat_rwlock, NULL);
 }
 
 void cleanup() {
+    remove_all_file_entries();
+    pthread_rwlock_destroy(&dbfat_rwlock);
     cleanup_clusters();
-    // TODO(zm): Recursively cleanup all directory entries starting from ROOT
 }
 
 /// name_checksum()
@@ -397,12 +402,16 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
         }
         
         if ((sector_index == 0) && (read_size == BPB_BytesPerSector)) {
+            pthread_rwlock_rdlock(&dbfat_rwlock);
             r = read_sector(sector, &buf[buf_offset]);
+            pthread_rwlock_unlock(&dbfat_rwlock);
             if (r) {
                 return r;
             }
         } else {
+            pthread_rwlock_rdlock(&dbfat_rwlock);
             r = read_sector(sector, tmp_sector);
+            pthread_rwlock_unlock(&dbfat_rwlock);
             if (r) {
                 return r;
             }
@@ -418,6 +427,7 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
 }
 
 struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMetaData *dbmetadata) {
+    pthread_rwlock_wrlock(&dbfat_rwlock);
     assert(path[0] == PATH_SEPARATOR);
     uint32_t path_last_index = 0;
     uint32_t path_index = 1;
@@ -494,10 +504,12 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
 
         current_entry = child_entry;
     }
+    pthread_rwlock_unlock(&dbfat_rwlock);
     return current_entry;
 }
 
 void remove_file_entry(uint32_t path_chars, utf16_t *path) {
+    pthread_rwlock_wrlock(&dbfat_rwlock);
     assert(path[0] == PATH_SEPARATOR);
     uint32_t path_last_index = 0;
     uint32_t path_index = 1;
@@ -516,7 +528,7 @@ void remove_file_entry(uint32_t path_chars, utf16_t *path) {
         struct DirEntry *child_entry = get_child_entry(current_entry, entry_name_chars, entry_name);
 
         if ((child_entry == NULL) || (path_index < path_chars && child_entry->metadata.is_dir == 0)) {
-            return;
+            break;
         }
 
         if (path_index == path_chars) {
@@ -524,6 +536,17 @@ void remove_file_entry(uint32_t path_chars, utf16_t *path) {
         }
         current_entry = child_entry;
     }
+    pthread_rwlock_unlock(&dbfat_rwlock);
+}
+
+void remove_all_file_entries() {
+    pthread_rwlock_wrlock(&dbfat_rwlock);
+    struct DirEntry *child = ROOT_DIR_ENTRY->child;
+    while (child) {
+        remove_child_entry(ROOT_DIR_ENTRY, child);
+        child = child->next;
+    }
+    pthread_rwlock_unlock(&dbfat_rwlock);
 }
 
 void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_t **utf16string) {

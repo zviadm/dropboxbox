@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "dbapi.h"
 #include "dbfat.h"
@@ -20,12 +21,18 @@ static int dbbox_getattr(const char *path, struct stat *stbuf)
 
     memset(stbuf, 0, sizeof(struct stat));
     if (strcmp(path, "/") == 0) {
-        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_mode = S_IFDIR | 0555;
         stbuf->st_nlink = 2;
     } else if (strcmp(path, DBBOX_PATH) == 0) {
-        stbuf->st_mode = S_IFREG | 0444;
+        //stbuf->st_mode = S_IFBLK | 0777;
+        //stbuf->st_rdev = 0x1234;
+        stbuf->st_mode = S_IFREG | 0666;
+
         stbuf->st_nlink = 1;
         stbuf->st_size = DBBOX_SIZE;
+        stbuf->st_atime = time(NULL);
+        stbuf->st_mtime = time(NULL);
+        stbuf->st_ctime = time(NULL);
     } else {
         res = -ENOENT;
     }
@@ -100,6 +107,6 @@ static struct fuse_operations dbbox_oper = {
 int main(int argc, char *argv[])
 {
     initialize();
-    dbapi_test();
+    start_dbapi_thread();
     return fuse_main(argc, argv, &dbbox_oper, NULL);
 }

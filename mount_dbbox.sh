@@ -15,5 +15,6 @@ sudo ./dbbox $DBBOX_IMG -d &
 FUSE_PID=$!
 
 sleep 5
-sudo mount $DBBOX_IMG/dbbox.img $DBBOX -t vfat -o loop,ro,noexec || sudo kill $FUSE_PID
+#sudo mount $DBBOX_IMG/dbbox.img $DBBOX -t vfat -o loop,ro,noexec 
+# || sudo kill $FUSE_PID
 wait $FUSE_PID
