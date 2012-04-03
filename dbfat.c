@@ -71,7 +71,7 @@ void _short_name_helper(struct EntryMetaData *metadata, uint32_t *short_index, u
             (*long_index)++;
             continue;
         }
-        
+
         if (metadata->name[*long_index] <= 0x7F) {
             // ascii character
             metadata->short_name[*short_index] = toupper((uint8_t)(metadata->name[*long_index] & 0x7F));
@@ -87,7 +87,7 @@ void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) 
     // TODO(zm): handle conflicts in short names...
     uint32_t short_index = 0;
     uint32_t long_index = 0;
-        
+
     while (metadata->name[long_index] == PATH_DOT && long_index < metadata->name_chars) {
         long_index++;
     }
@@ -144,7 +144,7 @@ struct DirEntry * add_child_entry(struct DirEntry *dir_entry, struct EntryMetaDa
     new_dir_entry->parent = dir_entry;
     new_dir_entry->next = child;
     new_dir_entry->child = NULL;
-    
+
     // construct cluster chain
     new_dir_entry->first_cluster = allocate_cluster_chain(new_dir_entry, new_dir_entry->metadata.size);
     return new_dir_entry;
@@ -159,7 +159,7 @@ void remove_child_entry(struct DirEntry *dir_entry, struct DirEntry *child_entry
             cc = cc->next;
         }
     }
-    
+
     // TODO(zm): maybe directory structure should be doubly-linked list?
     if (dir_entry->child == child_entry) {
        dir_entry->child = child_entry->next;
@@ -184,7 +184,7 @@ struct DirEntry * get_child_entry(struct DirEntry *dir_entry, uint8_t name_chars
             return child_entry;
         } else {
             child_entry = child_entry->next;
-        }        
+        }
     }
     return NULL;
 }
@@ -194,11 +194,11 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
     uint8_t name_offset = (long_entries - 1) * LONG_NAME_CHARS_PER_ENTRY;
     uint32_t buf_offset = 0;
 
-    utf16_t wll[LONG_NAME_CHARS_PER_ENTRY] = { 
-        0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 
+    utf16_t wll[LONG_NAME_CHARS_PER_ENTRY] = {
         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
-        0xFFFF, 
+        0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+        0xFFFF,
     };
     // prepare last long entry since it is more special than others
     for (uint8_t i = name_offset; i < child_entry->metadata.name_chars; i++) {
@@ -218,9 +218,9 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
             UINT16_TOARRAY(wll[2]),
             UINT16_TOARRAY(wll[3]),
             UINT16_TOARRAY(wll[4]),
-            ATTR_LONG_NAME, 
-            0x00, 
-            child_entry->metadata.name_checksum, 
+            ATTR_LONG_NAME,
+            0x00,
+            child_entry->metadata.name_checksum,
             UINT16_TOARRAY(wll[5]),
             UINT16_TOARRAY(wll[6]),
             UINT16_TOARRAY(wll[7]),
@@ -235,7 +235,7 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
 
         memcpy(&buf[buf_offset], long_entry, DIR_ENTRY_SIZE);
         buf_offset += DIR_ENTRY_SIZE;
-        
+
         name_offset -= LONG_NAME_CHARS_PER_ENTRY;
         if (name_offset >= 0) {
             memcpy(wll, &child_entry->metadata.name[name_offset], LONG_NAME_CHARS_PER_ENTRY * sizeof(utf16_t));
@@ -248,10 +248,10 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
         ll[0], ll[1], ll[2], ll[3],
         ll[4], ll[5], ll[6], ll[7],
         ll[8], ll[9], ll[10],
-        (child_entry->metadata.is_dir == 1) ? (ATTR_READ_ONLY | ATTR_DIRECTORY) : ATTR_READ_ONLY, 
+        (child_entry->metadata.is_dir == 1) ? (ATTR_READ_ONLY | ATTR_DIRECTORY) : ATTR_READ_ONLY,
         0x00,
         0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         UINT16_TOARRAY(child_entry->first_cluster >> 16),
         UINT16_TOARRAY(child_entry->metadata.DIR_WrtTime),
         UINT16_TOARRAY(child_entry->metadata.DIR_WrtDate),
@@ -284,11 +284,11 @@ void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
         uint8_t dot_entry[DIR_ENTRY_SIZE] = {
             '.', ' ', ' ', ' ',
             ' ', ' ', ' ', ' ',
-            ' ', ' ', ' ', 
+            ' ', ' ', ' ',
             ATTR_DIRECTORY,
             0x00,
             0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             UINT16_TOARRAY(dir_entry->first_cluster >> 16),
             UINT16_TOARRAY(dir_entry->metadata.DIR_WrtTime),
             UINT16_TOARRAY(dir_entry->metadata.DIR_WrtDate),
@@ -298,11 +298,11 @@ void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
         uint8_t dotdot_entry[DIR_ENTRY_SIZE] = {
             '.', '.', ' ', ' ',
             ' ', ' ', ' ', ' ',
-            ' ', ' ', ' ', 
+            ' ', ' ', ' ',
             ATTR_DIRECTORY,
             0x00,
             0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             UINT16_TOARRAY((dir_entry->parent == ROOT_DIR_ENTRY) ? 0 : (dir_entry->parent->first_cluster >> 16)),
             UINT16_TOARRAY(dir_entry->metadata.DIR_WrtTime),
             UINT16_TOARRAY(dir_entry->metadata.DIR_WrtDate),
@@ -360,17 +360,17 @@ int read_sector(uint32_t sector, uint8_t *buf) {
         return read_fat_sector(fat_sector, buf);
     } else {
         // Handle Data Region
-        uint32_t cluster_n = 2 + 
+        uint32_t cluster_n = 2 +
             (sector - (BPB_ReservedSectorCount + 2 * BPB_FATSz32)) / BPB_SectorsPerCluster;
 
         if (is_cluster_free(cluster_n)) {
             memset(buf, 0, BPB_BytesPerSector);
         } else {
             // Get DirEntry and offset of sector
-            struct DirEntry *dir_entry = 
+            struct DirEntry *dir_entry =
                 get_cluster_dir_entry(cluster_n);
-            uint32_t offset = 
-                get_cluster_chain_size(dir_entry->first_cluster, cluster_n) + 
+            uint32_t offset =
+                get_cluster_chain_size(dir_entry->first_cluster, cluster_n) +
                 (sector - ((cluster_n - 2) * BPB_SectorsPerCluster + (BPB_ReservedSectorCount + 2 * BPB_FATSz32))) * BPB_BytesPerSector;
 
             if (dir_entry->metadata.is_dir) {
@@ -400,7 +400,7 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
         } else{
             read_size = BPB_BytesPerSector;
         }
-        
+
         if ((sector_index == 0) && (read_size == BPB_BytesPerSector)) {
             pthread_rwlock_rdlock(&dbfat_rwlock);
             r = read_sector(sector, &buf[buf_offset]);
@@ -418,7 +418,7 @@ int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
             memcpy(&buf[buf_offset], &tmp_sector[sector_index], read_size);
             sector_index = 0;
         }
-        
+
         sector += 1;
         buf_offset += read_size;
     }
@@ -438,7 +438,7 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
         while ((path_index < path_chars) && (path[path_index] != PATH_SEPARATOR)) {
             path_index += 1;
         }
-        
+
         // path:  path[0:path_last_index+1]
         // entry: path[path_last_index+1:path_index]
         uint8_t entry_name_chars = path_index - (path_last_index + 1);
@@ -457,7 +457,7 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
                 metadata.is_dir = dbmetadata->is_dir;
                 metadata.size = (dbmetadata->is_dir == 0) ? dbmetadata->size : 64;
                 metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
-                metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
+                metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime);
 
                 metadata.name_chars = entry_name_chars;
                 metadata.name = (utf16_t *)malloc(entry_name_chars * sizeof(utf16_t));
@@ -470,12 +470,12 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
                     // for files need to update size and reallocate cluster chain
                     child_entry->metadata.size = dbmetadata->size;
                     child_entry->first_cluster = reallocate_cluster_chain(child_entry->first_cluster, child_entry->metadata.size);
-                } 
+                }
                 child_entry->metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
-                child_entry->metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
+                child_entry->metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime);
             }
         } else {
-            // need to make sure that all parent directories in "path" exist if not 
+            // need to make sure that all parent directories in "path" exist if not
             // as described in Dropbox Api "delta" protocol they must be created.
             // also if there is a file instead of directory in given "path" the file needs
             // to be removed.
@@ -489,7 +489,7 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
                 metadata.is_dir = 1;
                 metadata.size = 64;
                 metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
-                metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime); 
+                metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime);
 
                 metadata.name_chars = entry_name_chars;
                 metadata.name = (utf16_t *)malloc((entry_name_chars + 1) * sizeof(utf16_t));
@@ -556,7 +556,9 @@ void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_
     size_t inbytesleft = utf8size;
     size_t outbytesleft = BUF_SIZE;
 
-    iconv_t utf8_to_utf16 = iconv_open("UTF16LE", "UTF8");
+    iconv_t utf8_to_utf16 = iconv_open("UTF-16LE", "UTF-8");
+    assert(utf8_to_utf16 != (iconv_t) -1);
+
     size_t r = iconv(utf8_to_utf16, &utf8string, &inbytesleft, &outbuf, &outbytesleft);
     assert(r != (size_t) -1);
     assert(inbytesleft == 0);

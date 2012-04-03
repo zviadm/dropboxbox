@@ -2,19 +2,26 @@
 
 set -e
 
+# Make sure only root can run our script
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root" 1>&2
+    exit 1
+fi
+
 DBBOX_IMG=/tmp/dbbox_img
 DBBOX=/tmp/dbbox
 
-sudo umount -f $DBBOX || true
-sudo umount -f $DBBOX_IMG || true
+umount -f $DBBOX || true
+umount -f $DBBOX_IMG || true
 
-sudo mkdir -p $DBBOX
-sudo mkdir -p $DBBOX_IMG
+mkdir -p $DBBOX
+mkdir -p $DBBOX_IMG
 
-sudo ./dbbox $DBBOX_IMG -d &
+./dbbox $DBBOX_IMG -d &
 FUSE_PID=$!
+echo "DBBOX FUSE running, pid: $FUSE_PID"
+trap "kill $FUSE_PID" EXIT
 
 sleep 5
-#sudo mount $DBBOX_IMG/dbbox.img $DBBOX -t vfat -o loop,ro,noexec 
-# || sudo kill $FUSE_PID
+mount $DBBOX_IMG/dbbox.img $DBBOX -t vfat -o loop,ro,noexec
 wait $FUSE_PID

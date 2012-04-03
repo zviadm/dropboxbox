@@ -20,19 +20,20 @@ OBJS=$(patsubst %.c, $(OBJ_DIR)/%.o, $(SRCS))
 PROG=dbbox
 INCLUDES=				\
 	-I/usr/include/fuse \
-	-I/usr/include/nss  \
 	-I/usr/include/nspr
 
 LIBS=								\
-	-lm 							\
-	-pthread -lfuse -lrt -ldl 		\
-	-lcurl -Wl,-Bsymbolic-functions \
-	-loauth
+	-lm -liconv -loauth				\
+	-pthread -lfuse -lrt -ldl		\
+	-lcurl -Wl,-Bsymbolic-functions
+
+all:$(PROG)
+
+$(OBJ_DIR):
+	mkdir $(OBJ_DIR)
 
 $(OBJ_DIR)/%.o: %.c $(HDRS)
 	$(CC) -c $(CFLAGS) $(INCLUDES) $< -o $@
-
-all:$(PROG)
 
 $(PROG):$(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LIBS)
