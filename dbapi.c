@@ -75,7 +75,7 @@ CURLcode dbapi_post_request(CURL *curl, char* url, char *postargs, long int *htt
             printf("[ERROR] DBApi POST request failed, http status code: %ld\n", *http_status);
         }
     } else {
-        printf("[ERROR] DBApi POST request failed, error code: %u, error msg: %s\n", 
+        printf("[ERROR] DBApi POST request failed, error code: %u, error msg: %s\n",
                 ret, curl_easy_strerror(ret));
     }
 
@@ -127,7 +127,7 @@ int dbapi_update() {
 
         cJSON *entries = cJSON_GetObjectItem(result, "entries");
         int nentries = cJSON_GetArraySize(entries);
-        printf("[DEBUG] DBApi DELTA request, reset: %d, has_more: %d, entries: %d, cursor:\n%s\n", 
+        printf("[DEBUG] DBApi DELTA request, reset: %d, has_more: %d, entries: %d, cursor:\n%s\n",
                 reset, has_more, nentries, new_cursor);
         for (int i = 0; i < nentries; i++) {
             cJSON *entry = cJSON_GetArrayItem(entries, i);
@@ -147,12 +147,12 @@ int dbapi_update() {
                 double size_double = cJSON_GetObjectItem(metadata, "bytes")->valuedouble;
                 if (size_double > FAT_MAX_FILE_SIZE) {
                     // truncate files that are larger than what is supported by FAT
-                    dbmetadata.size = FAT_MAX_FILE_SIZE; 
+                    dbmetadata.size = FAT_MAX_FILE_SIZE;
                 } else {
                     dbmetadata.size = (uint32_t)size_double;
                 }
 
-                printf("ENTRY: %s\tis_dir: %u\tmtime: %u\tsize: %u\n", 
+                printf("ENTRY: %s\tis_dir: %u\tmtime: %u\tsize: %u\n",
                         path, dbmetadata.is_dir, dbmetadata.mtime, dbmetadata.size);
                 add_file_entry(utf16path_chars, utf16path, &dbmetadata);
             } else {
@@ -181,13 +181,13 @@ void *dbapi_thread(void *args) {
 
     CONSUMER_KEY    = CONSUMER_KEY_APP_FOLDER;
     CONSUMER_SECRET = CONSUMER_SECRET_APP_FOLDER;
-    
+
     while (1) {
         int update_more = dbapi_update();
         switch (update_more) {
             case 0:
             case 2:
-                sleep(10);
+                sleep(600);
                 break;
         }
     }

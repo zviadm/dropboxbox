@@ -53,7 +53,7 @@ void add_test_data();
 // special PATH characters
 #define PATH_DOT        '.'
 #define PATH_SEPARATOR  '/'
-#define PATH_SPACE      ' '       
+#define PATH_SPACE      ' '
 #define PATH_TILDA      '~'
 #define PATH_UNDERSCORE '_'
 
@@ -82,9 +82,9 @@ void add_test_data();
     UINT24_TOARRAY(x), (((x) >> 24) & 0xFF)
 
 #define BPB_BytesPerSector      512
-#define BPB_SectorsPerCluster   1
+#define BPB_SectorsPerCluster   64
 #define BPB_ReservedSectorCount 32
-#define BPB_TotalSectors        262144
+#define BPB_TotalSectors        0x10000000L
 #define tmpFATSz32_1 (BPB_TotalSectors - BPB_ReservedSectorCount)
 #define tmpFATSz32_2 (BPB_SectorsPerCluster * BPB_BytesPerSector / 32 + 2)
 #define BPB_FATSz32             ((uint32_t)((tmpFATSz32_1 + tmpFATSz32_2 - 1) / tmpFATSz32_2))
@@ -113,7 +113,7 @@ static const uint8_t BOOT_SECTOR[512] = {
     0x00, 0x00,                             // BPB_SecPerTrk
     0x00, 0x00,                             // BPB_NumHeads
     0x00, 0x00, 0x00, 0x00,                 // BPB_HiddSec
-    UINT32_TOARRAY(BPB_TotalSectors),     
+    UINT32_TOARRAY(BPB_TotalSectors),
     UINT32_TOARRAY(BPB_FATSz32),
     0x00, 0x00,                             // BPB_ExtFlags
     0x00, 0x00,                             // BPB_FSVer
@@ -123,14 +123,14 @@ static const uint8_t BOOT_SECTOR[512] = {
     0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,                 // BPB_Reserved
-    
+
     0x00,                                   // BS_DrvNum
     0x00,                                   // BS_Reserved1
     0x29,                                   // BS_BootSig,
     UINT32_TOARRAY(BS_VolumeID),
     'D', 'R', 'O', 'P', 'B', 'O', 'X', ' ',
     'B', 'O', 'X',                          // BS_VolLab
-    'F', 'A', 'T', '3', '2', ' ', ' ', ' ', // BS_FilSysType 
+    'F', 'A', 'T', '3', '2', ' ', ' ', ' ', // BS_FilSysType
     0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,

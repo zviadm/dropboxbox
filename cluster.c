@@ -60,7 +60,8 @@ uint32_t find_free_cluster() {
             return i;
         }
     }
-    return 0xFFFFFFFF;
+    // if there are no more available clusters that is bad, very bad...
+    assert(0);
 }
 
 int is_cluster_free(uint32_t cluster) {
@@ -93,7 +94,7 @@ uint32_t reallocate_cluster_chain(uint32_t first_cluster, uint32_t new_size) {
         if (FAT_ENTRIES[next_cluster] == FAT_EOFC_ENTRY) {
             // new size is larger than previous so extend the cluster
             extending = 1;
-        } 
+        }
         if (extending == 1) {
             FAT_ENTRIES[next_cluster] = find_free_cluster();
             DIR_ENTRIES[next_cluster] = DIR_ENTRIES[first_cluster];
@@ -106,7 +107,7 @@ uint32_t reallocate_cluster_chain(uint32_t first_cluster, uint32_t new_size) {
         // free clusters since we have shrunk current chain
         free_cluster_chain(next_cluster);
     }
-    
+
     FAT_ENTRIES[next_cluster] = FAT_EOFC_ENTRY;
     DIR_ENTRIES[next_cluster] = DIR_ENTRIES[first_cluster];
     return first_cluster;

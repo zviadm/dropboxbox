@@ -125,12 +125,12 @@ void set_short_name(struct DirEntry *dir_entry, struct EntryMetaData *metadata) 
 }
 
 struct DirEntry * add_child_entry(struct DirEntry *dir_entry, struct EntryMetaData *metadata) {
-    uint32_t entry_extra_size = get_entry_size(metadata);
     // extend dir_entry if necessary to accomodate for extra entry_extra_size bytes
+    uint32_t entry_extra_size = get_entry_size(metadata);
     uint32_t last_cluster_size = (dir_entry->metadata.size % BYTES_PER_CLUSTER);
+    dir_entry->metadata.size += entry_extra_size;
     if ((last_cluster_size + entry_extra_size) > BYTES_PER_CLUSTER) {
         // extend dir_entry cluster chain
-        dir_entry->metadata.size += entry_extra_size;
         dir_entry->first_cluster = reallocate_cluster_chain(dir_entry->first_cluster, dir_entry->metadata.size);
     }
 
@@ -171,6 +171,17 @@ void remove_child_entry(struct DirEntry *dir_entry, struct DirEntry *child_entry
         }
         cc->next = child_entry->next;
     }
+
+    // shrink dir_entry if necessary
+    uint32_t entry_extra_size = get_entry_size(&(child_entry->metadata));
+    uint32_t last_cluster_size = (dir_entry->metadata.size % BYTES_PER_CLUSTER);
+    dir_entry->metadata.size -= entry_extra_size;
+    if (last_cluster_size < entry_extra_size) {
+        // shrink dir_entry cluster chain
+        dir_entry->first_cluster = reallocate_cluster_chain(dir_entry->first_cluster, dir_entry->metadata.size);
+    }
+
+    dir_entry->metadata.size += entry_extra_size;
     free_cluster_chain(child_entry->first_cluster);
     free(child_entry->metadata.name);
     free(child_entry);
@@ -313,7 +324,7 @@ void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
         buf_offset += DIR_ENTRY_SIZE;
         memcpy(&tmp_buf[buf_offset], dotdot_entry, DIR_ENTRY_SIZE);
         buf_offset += DIR_ENTRY_SIZE;
-    } else if (child_offset < offset) {
+    } else if ((child_entry != NULL) && (child_offset < offset)) {
         const uint32_t offset_delta = offset - child_offset;
         uint32_t entry_size = get_dir_contents(dir_entry, child_entry, tmp_buf);
         assert(entry_size > offset_delta);
@@ -325,15 +336,12 @@ void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
         child_entry = child_entry->next;
     }
 
-    while (child_entry && buf_offset < BPB_BytesPerSector) {
+    while ((child_entry != NULL) && (buf_offset < BPB_BytesPerSector)) {
         uint32_t entry_size = get_dir_contents(dir_entry, child_entry, &tmp_buf[buf_offset]);
         buf_offset += entry_size;
         child_entry = child_entry->next;
     }
     printf("[DEBUG] Read Dir Sector: %u, %u, buf_offset: %u\n", dir_entry->first_cluster, offset, buf_offset);
-    for (uint32_t i = 0; i < buf_offset; i += 32) {
-
-    }
     memcpy(buf, tmp_buf, BPB_BytesPerSector);
 }
 
