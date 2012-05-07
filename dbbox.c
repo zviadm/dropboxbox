@@ -13,7 +13,7 @@
 #include "dbfat.h"
 
 const char *DBBOX_PATH = "/dbbox.img";
-const off_t DBBOX_SIZE = BPB_TotalSectors * BPB_BytesPerSector;
+const off_t DBBOX_SIZE = (off_t)BPB_TotalSectors * (off_t)BPB_BytesPerSector;
 
 static int dbbox_getattr(const char *path, struct stat *stbuf)
 {

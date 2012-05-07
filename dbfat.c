@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dbapi.h"
 #include "dbfat.h"
 #include "cluster.h"
 
@@ -275,7 +276,7 @@ uint32_t get_dir_contents(struct DirEntry *dir_entry, struct DirEntry *child_ent
     return buf_offset;
 }
 
-void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) {
+int read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) {
     uint8_t tmp_buf[2 * BPB_BytesPerSector] = { 0x00 };
     uint32_t buf_offset = 0;
 
@@ -343,6 +344,58 @@ void read_dir_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
     }
     printf("[DEBUG] Read Dir Sector: %u, %u, buf_offset: %u\n", dir_entry->first_cluster, offset, buf_offset);
     memcpy(buf, tmp_buf, BPB_BytesPerSector);
+    return 0;
+}
+
+void get_file_path(struct DirEntry *dir_entry, size_t *utf8path_size, char **utf8path) {
+    uint32_t path_chars = 0;
+    struct DirEntry *entry = dir_entry;
+    while (entry != ROOT_DIR_ENTRY) {
+        path_chars += (1 + entry->metadata.name_chars);
+        entry = entry->parent;
+    }
+
+    utf16_t *path = (utf16_t *)malloc(path_chars * sizeof(utf16_t));
+
+    uint32_t current_pos = path_chars;
+    entry = dir_entry;
+    while (entry != ROOT_DIR_ENTRY) {
+        current_pos -= (1 + entry->metadata.name_chars);
+        path[current_pos] = PATH_SEPARATOR;
+        memcpy(&path[current_pos + 1], entry->metadata.name, entry->metadata.name_chars * sizeof(utf16_t));
+        entry = entry->parent;
+    }
+
+    utf16_to_utf8(path_chars, path, utf8path_size, utf8path);
+}
+
+int read_file_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) {
+    memset(buf, 0, BPB_BytesPerSector);
+
+    uint32_t range_start = offset;
+    if (dir_entry->metadata.size < offset) {
+        return 0;
+    }
+
+    uint32_t range_end = offset + BPB_BytesPerSector;
+    if (dir_entry->metadata.size < range_end) {
+        range_end = dir_entry->metadata.size;
+    }
+
+    char *path;
+    size_t path_size;
+    get_file_path(dir_entry, &path_size, &path);
+    assert(path[path_size - 1] == 0);
+
+    uint8_t *tmp_buf;
+    size_t tmp_buf_size;
+    int ret = dbapi_get_file(NULL, path, (char *)dir_entry->metadata.rev, range_start, range_end, (char **)&tmp_buf, &tmp_buf_size);
+    if (ret == 0) {
+        memcpy(buf, tmp_buf, tmp_buf_size);
+        free(tmp_buf);
+    }
+    free(path);
+    return ret;
 }
 
 int read_sector(uint32_t sector, uint8_t *buf) {
@@ -382,9 +435,9 @@ int read_sector(uint32_t sector, uint8_t *buf) {
                 (sector - ((cluster_n - 2) * BPB_SectorsPerCluster + (BPB_ReservedSectorCount + 2 * BPB_FATSz32))) * BPB_BytesPerSector;
 
             if (dir_entry->metadata.is_dir) {
-                read_dir_sector(dir_entry, offset, buf);
+                return read_dir_sector(dir_entry, offset, buf);
             } else {
-                memset(buf, 0, BPB_BytesPerSector);
+                return read_file_sector(dir_entry, offset, buf);
             }
         }
         return 0;
@@ -466,6 +519,7 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
                 metadata.size = (dbmetadata->is_dir == 0) ? dbmetadata->size : 64;
                 metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
                 metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime);
+                memcpy(metadata.rev, dbmetadata->rev, DB_REV_SIZE);
 
                 metadata.name_chars = entry_name_chars;
                 metadata.name = (utf16_t *)malloc(entry_name_chars * sizeof(utf16_t));
@@ -481,6 +535,7 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
                 }
                 child_entry->metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
                 child_entry->metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime);
+                memcpy(child_entry->metadata.rev, dbmetadata->rev, DB_REV_SIZE);
             }
         } else {
             // need to make sure that all parent directories in "path" exist if not
@@ -498,6 +553,7 @@ struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMe
                 metadata.size = 64;
                 metadata.DIR_WrtDate = get_wrt_date(dbmetadata->mtime);
                 metadata.DIR_WrtTime = get_wrt_time(dbmetadata->mtime);
+                memcpy(metadata.rev, dbmetadata->rev, DB_REV_SIZE);
 
                 metadata.name_chars = entry_name_chars;
                 metadata.name = (utf16_t *)malloc((entry_name_chars + 1) * sizeof(utf16_t));
@@ -576,6 +632,27 @@ void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_
     *utf16string = (utf16_t *)malloc((*utf16chars) * sizeof(utf16_t));
     memcpy(*utf16string, OUTBUF, (*utf16chars) * sizeof(utf16_t));
     iconv_close(utf8_to_utf16);
+}
+
+void utf16_to_utf8(size_t utf16chars, utf16_t *utf16string, size_t *utf8size, char **utf8string) {
+    const size_t BUF_SIZE = 64 * 1024;
+    char OUTBUF[BUF_SIZE];
+    char *outbuf = OUTBUF;
+    size_t inbytesleft = utf16chars * sizeof(utf16_t);
+    size_t outbytesleft = BUF_SIZE;
+
+    iconv_t utf16_to_utf8 = iconv_open("UTF-8", "UTF-16LE");
+    assert(utf16_to_utf8 != (iconv_t) -1);
+
+    size_t r = iconv(utf16_to_utf8, (char **)&utf16string, &inbytesleft, &outbuf, &outbytesleft);
+    assert(r != (size_t) -1);
+    assert(inbytesleft == 0);
+
+    *utf8size = (BUF_SIZE - outbytesleft) + 1;
+    *utf8string = (char *)malloc(*utf8size);
+    memcpy(*utf8string, OUTBUF, *utf8size);
+    (*utf8string)[*utf8size - 1] = 0;
+    iconv_close(utf16_to_utf8);
 }
 
 void add_test_file(char *path, uint8_t is_dir, uint32_t size, uint32_t mtime) {

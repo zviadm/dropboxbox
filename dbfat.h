@@ -5,6 +5,7 @@
 #include <wchar.h>
 
 typedef uint16_t utf16_t;
+#define DB_REV_SIZE 11
 
 struct EntryMetaData {
     uint32_t size;
@@ -16,6 +17,8 @@ struct EntryMetaData {
     uint8_t name_checksum;
     uint8_t short_name[11];
     utf16_t *name;
+
+    uint8_t rev[DB_REV_SIZE];
 };
 
 struct DirEntry {
@@ -31,7 +34,7 @@ struct DBMetaData {
     uint32_t size;
     uint32_t mtime;
     uint8_t is_dir;
-    // TODO(zm): add rev
+    uint8_t rev[DB_REV_SIZE];
 };
 
 // Interface to read dbbox image
@@ -43,6 +46,7 @@ void remove_file_entry(uint32_t path_chars, utf16_t *path);
 void remove_all_file_entries();
 
 void utf8_to_utf16(size_t utf8size, char *utf8string, size_t *utf16chars, utf16_t **utf16string);
+void utf16_to_utf8(size_t utf16chars, utf16_t *utf16string, size_t *utf8size, char **utf8string);
 
 // functions for testing
 void add_test_data();

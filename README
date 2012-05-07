@@ -3,9 +3,11 @@ sudo apt-get install liboauth-dev
 sudo apt-get install libfuse-dev
 sudo apt-get install libgsl0-dev
 
-make
-sudo ./mount_dbbox.sh
+# restarting dbbox
+make; sudo ./mount_dbbox.sh
 
+# using dbbox as a usb mass storage device
+sync; echo 1 > /proc/sys/vm/drop_caches; rmmod g_mass_storage; modprobe g_mass_storage file=/tmp/dbbox_img/dbbox.img ro=1
 
 ## For Beaglebone
 
