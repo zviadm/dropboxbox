@@ -1,14 +1,15 @@
 #include <assert.h>
-#include <curl/curl.h>
-#include <iconv.h>
-#include <oauth.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <curl/curl.h>
+#include <iconv.h>
+#include <oauth.h>
+#include <pthread.h>
 
 #include "dbapi.h"
 #include "dbfat.h"
