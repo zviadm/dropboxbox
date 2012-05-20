@@ -38,8 +38,8 @@ struct DBMetaData {
 };
 
 // Interface to read dbbox image
-void initialize();
-void cleanup();
+void initialize_dbfat();
+void cleanup_dbfat();
 int read_data(uint32_t offset, uint32_t size, uint8_t *buf);
 struct DirEntry * add_file_entry(uint32_t path_chars, utf16_t *path, struct DBMetaData *dbmetadata);
 void remove_file_entry(uint32_t path_chars, utf16_t *path);

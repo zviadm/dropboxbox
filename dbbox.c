@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     // check size of important data types
     assert(sizeof(off_t) == 8);
 
-    initialize();
+    initialize_dbfat();
     //add_test_data();
     start_dbapi_thread();
     return fuse_main(argc, argv, &dbbox_oper, NULL);

@@ -6,12 +6,14 @@ SRCS=			\
 	dbapi.c		\
 	dbbox.c		\
 	dbfat.c		\
+	dbfiles.c	\
 	cJSON.c
 
 HDRS=			\
 	cluster.h	\
 	dbapi.h		\
 	dbfat.h		\
+	dbfiles.h	\
 	cJSON.h
 
 OBJ_DIR=obj

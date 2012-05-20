@@ -16,7 +16,7 @@
 struct DirEntry *ROOT_DIR_ENTRY;
 pthread_rwlock_t dbfat_rwlock;
 
-void initialize() {
+void initialize_dbfat() {
     // initialize DIR_ENTRIES and ROOT directory entry
     ROOT_DIR_ENTRY = (struct DirEntry *)malloc(sizeof(struct DirEntry));
     memset(ROOT_DIR_ENTRY, 0, sizeof(struct DirEntry));
@@ -27,7 +27,7 @@ void initialize() {
     pthread_rwlock_init(&dbfat_rwlock, NULL);
 }
 
-void cleanup() {
+void cleanup_dbfat() {
     remove_all_file_entries();
     pthread_rwlock_destroy(&dbfat_rwlock);
     cleanup_clusters();
