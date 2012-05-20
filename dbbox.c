@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 201001L
 #define FUSE_USE_VERSION 26
 
+#include <assert.h>
 #include <fuse.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -106,6 +107,9 @@ static struct fuse_operations dbbox_oper = {
 
 int main(int argc, char *argv[])
 {
+    // check size of important data types
+    assert(sizeof(off_t) == 8);
+
     initialize();
     //add_test_data();
     start_dbapi_thread();
