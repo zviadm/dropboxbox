@@ -2,13 +2,14 @@
 #define FUSE_USE_VERSION 26
 
 #include <assert.h>
-#include <fuse.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+
+#include <fuse.h>
 
 #include "dbapi.h"
 #include "dbfat.h"

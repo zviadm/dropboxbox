@@ -1,11 +1,12 @@
 #include <assert.h>
 #include <ctype.h>
-#include <iconv.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <iconv.h>
+#include <pthread.h>
 
 #include "dbapi.h"
 #include "dbfat.h"
