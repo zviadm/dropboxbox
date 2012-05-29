@@ -6,13 +6,14 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <time.h>
 
 #include <fuse.h>
+#include <sys/stat.h>
 
 #include "dbapi.h"
 #include "dbfat.h"
+#include "dbfiles.h"
 
 const char *DBBOX_PATH = "/dbbox.img";
 const off_t DBBOX_SIZE = (off_t)BPB_TotalSectors * (off_t)BPB_BytesPerSector;
@@ -91,7 +92,12 @@ static int dbbox_read(
         if (offset + size > DBBOX_SIZE) {
             size = DBBOX_SIZE - offset;
         }
-        read_data((uint32_t)offset, (uint32_t)size, (uint8_t *)buf);
+        int r = read_data((uint32_t)offset, (uint32_t)size, (uint8_t *)buf);
+        if (r != 0) {
+            // TODO(ZM): choose better error code, or maybe even customize error codes
+            // based on failure
+            return -EBUSY;
+        }
     } else{
         size = 0;
     }
@@ -112,6 +118,7 @@ int main(int argc, char *argv[])
     assert(sizeof(off_t) == 8);
 
     initialize_dbfat();
+    initialize_file_cache();
     //add_test_data();
     start_dbapi_thread();
     return fuse_main(argc, argv, &dbbox_oper, NULL);

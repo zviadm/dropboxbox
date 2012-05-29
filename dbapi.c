@@ -36,6 +36,42 @@ const long int HTTP_PARTIAL_CONTENT = 206;
 CURL *dbapi_curl   = NULL;
 char *dbapi_cursor = NULL;
 
+char hex_char(int hex_digit) {
+    assert(hex_digit >= 0);
+    assert(hex_digit < 16);
+    if (hex_digit < 10) {
+        return '0' + hex_digit;
+    } else {
+        return 'a' + (hex_digit - 10);
+    }
+}
+
+char *db_url_escape(char *url) {
+    size_t url_size = strlen(url);
+    char *buf = (char *)malloc(url_size * 3 + 1);
+    memset(buf, 0, url_size * 3 + 1);
+
+    size_t buf_offset = 0;
+    for (int i = 0; i < url_size; i++) {
+        // unescaped chars [0-9a-zA-Z], '-', '.', '_' and
+        // '/' to be similar to urllib.quote function in python
+        if ((48 <= url[i] && url[i] <= 57) ||
+            (65 <= url[i] && url[i] <= 90) ||
+            (97 <= url[i] && url[i] <= 122) ||
+            (url[i] == '-' || url[i] == '.' || url[i] == '_' || url[i] =='/')) {
+            buf[buf_offset] = url[i];
+            buf_offset += 1;
+        } else {
+            buf[buf_offset] = '%';
+            buf[buf_offset + 1] = hex_char(url[i] / 16);
+            buf[buf_offset + 2] = hex_char(url[i] % 16);
+            buf_offset += 3;
+        }
+    }
+    buf[buf_offset] = '\x00';
+    return buf;
+}
+
 void curl_base_setup(CURL *curl) {
     curl_easy_reset(curl);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
@@ -155,22 +191,22 @@ int dbapi_get_file(CURL *curl, char *path, char *rev, long int range_start, long
     char *request_args = (char *)malloc(strlen(rev_prefix) + strlen(rev) + 1);
     sprintf(request_args, "%s%s", rev_prefix, rev);
 
-    char *url = (char *)malloc(strlen(URL_FILES) + strlen(DROPBOX_ROOT) + strlen(path) + 1);
-    sprintf(url, "%s%s%s", URL_FILES, DROPBOX_ROOT, path);
+    char *escaped_path = db_url_escape(path);
+    char *url = (char *)malloc(strlen(URL_FILES) + strlen(DROPBOX_ROOT) + strlen(escaped_path) + 1);
+    sprintf(url, "%s%s%s", URL_FILES, DROPBOX_ROOT, escaped_path);
 
     long int http_status;
     cJSON *error = NULL;
 
-    // TODO(zm): need to change this
-    curl = curl_easy_init();
     CURLcode ret = dbapi_range_request(
             curl, url, "GET", request_args, range_start, range_end,
             &http_status, response_buffer, response_size, &error
             );
 
+    free(escaped_path);
     free(url);
     free(request_args);
-    curl_easy_cleanup(curl);
+    // TODO(ZM): might want to propagate or print this error
     if (error) cJSON_Delete(error);
     return ((ret == CURLE_OK) && ((http_status == HTTP_OK) || (http_status == HTTP_PARTIAL_CONTENT))) ? 0 : -1;
 }

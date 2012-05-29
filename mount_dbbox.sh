@@ -20,7 +20,13 @@ mkdir -p $DBBOX_IMG
 ./dbbox $DBBOX_IMG -d &
 FUSE_PID=$!
 echo "DBBOX FUSE running, pid: $FUSE_PID"
-trap "kill $FUSE_PID" EXIT
+
+function on_exit() {
+    echo "exiting DBBOX..."
+    kill -9 $FUSE_PID
+}
+trap on_exit EXIT
+trap on_exit SIGINT
 
 sleep 5
 mount $DBBOX_IMG/dbbox.img $DBBOX -t vfat -o loop,ro,noexec

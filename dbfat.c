@@ -10,6 +10,7 @@
 
 #include "dbapi.h"
 #include "dbfat.h"
+#include "dbfiles.h"
 #include "cluster.h"
 
 // Directory Entries
@@ -371,16 +372,9 @@ void get_file_path(struct DirEntry *dir_entry, size_t *utf8path_size, char **utf
 }
 
 int read_file_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) {
-    memset(buf, 0, BPB_BytesPerSector);
-
-    uint32_t range_start = offset;
-    if (dir_entry->metadata.size < offset) {
+    if (offset >= dir_entry->metadata.size) {
+        memset(buf, 0, BPB_BytesPerSector);
         return 0;
-    }
-
-    uint32_t range_end = offset + BPB_BytesPerSector;
-    if (dir_entry->metadata.size < range_end) {
-        range_end = dir_entry->metadata.size;
     }
 
     char *path;
@@ -388,14 +382,9 @@ int read_file_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
     get_file_path(dir_entry, &path_size, &path);
     assert(path[path_size - 1] == 0);
 
-    uint8_t *tmp_buf;
-    size_t tmp_buf_size;
-    int ret = dbapi_get_file(NULL, path, (char *)dir_entry->metadata.rev, range_start, range_end, (char **)&tmp_buf, &tmp_buf_size);
-    if (ret == 0) {
-        memcpy(buf, tmp_buf, tmp_buf_size);
-        free(tmp_buf);
-    }
+    int ret = read_sector_from_cache(path_size, path, dir_entry->metadata.rev, offset, dir_entry->metadata.size, buf);
     free(path);
+    printf("[DEBUG] Read File Sector: %u, %u\n", dir_entry->first_cluster, offset);
     return ret;
 }
 
@@ -424,6 +413,8 @@ int read_sector(uint32_t sector, uint8_t *buf) {
         // Handle Data Region
         uint32_t cluster_n = 2 +
             (sector - (BPB_ReservedSectorCount + 2 * BPB_FATSz32)) / BPB_SectorsPerCluster;
+        uint32_t sector_offset =
+            (sector - (BPB_ReservedSectorCount + 2 * BPB_FATSz32)) % BPB_SectorsPerCluster;
 
         if (is_cluster_free(cluster_n)) {
             memset(buf, 0, BPB_BytesPerSector);
@@ -432,8 +423,7 @@ int read_sector(uint32_t sector, uint8_t *buf) {
             struct DirEntry *dir_entry =
                 get_cluster_dir_entry(cluster_n);
             uint32_t offset =
-                get_cluster_chain_size(dir_entry->first_cluster, cluster_n) +
-                (sector - ((cluster_n - 2) * BPB_SectorsPerCluster + (BPB_ReservedSectorCount + 2 * BPB_FATSz32))) * BPB_BytesPerSector;
+                get_cluster_chain_size(dir_entry->first_cluster, cluster_n) + sector_offset * BPB_BytesPerSector;
 
             if (dir_entry->metadata.is_dir) {
                 return read_dir_sector(dir_entry, offset, buf);
@@ -447,7 +437,7 @@ int read_sector(uint32_t sector, uint8_t *buf) {
 
 int read_data(uint32_t offset, uint32_t size, uint8_t *buf) {
     uint32_t sector = (offset / BPB_BytesPerSector);
-    uint32_t sector_index = offset - sector * BPB_BytesPerSector;
+    uint32_t sector_index = (offset % BPB_BytesPerSector);
     uint32_t buf_offset = 0;
 
     uint8_t tmp_sector[BPB_BytesPerSector];

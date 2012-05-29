@@ -18,7 +18,7 @@ struct EntryMetaData {
     uint8_t short_name[11];
     utf16_t *name;
 
-    uint8_t rev[DB_REV_SIZE];
+    char rev[DB_REV_SIZE];
 };
 
 struct DirEntry {
@@ -34,7 +34,7 @@ struct DBMetaData {
     uint32_t size;
     uint32_t mtime;
     uint8_t is_dir;
-    uint8_t rev[DB_REV_SIZE];
+    char rev[DB_REV_SIZE];
 };
 
 // Interface to read dbbox image
