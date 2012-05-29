@@ -15,7 +15,7 @@
 #define CACHE_BLOCK_SIZE  (1 << 20) // 1MB blocks
 #define CACHE_BLOCK_COUNT 16        // number of blocks must be more than (max_prefetched_blocks * fuse_threads + block_fetcher_thread_count)
 
-const int BLOCK_FETCHER_THREAD_COUNT = 10; // number of threads that fetch file blocks
+const int BLOCK_FETCHER_THREAD_COUNT = 5;  // number of threads that fetch file blocks
 const int MAX_BLOCK_PREFETCH = 3;          // maximum number of blocks to prefetch
 const int READ_SECTOR_TIMEOUT = 30 * 1000; // sector reading timeout in milli seconds
 
@@ -68,6 +68,7 @@ void initialize_file_cache() {
         pthread_attr_t attr;
         pthread_attr_init(&attr);
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        pthread_attr_setstacksize(&attr, 128 * 1024);
 
         pthread_t thread;
         pthread_create(&thread, &attr, block_fetcher_thread, NULL);

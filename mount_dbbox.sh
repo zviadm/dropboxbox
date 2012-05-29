@@ -17,7 +17,7 @@ umount -f $DBBOX_IMG || true
 mkdir -p $DBBOX
 mkdir -p $DBBOX_IMG
 
-./dbbox $DBBOX_IMG -d &
+env FUSE_THREAD_STACK=262144 ./dbbox $DBBOX_IMG -d &
 FUSE_PID=$!
 echo "DBBOX FUSE running, pid: $FUSE_PID"
 

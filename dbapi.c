@@ -310,6 +310,7 @@ void start_dbapi_thread() {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&attr, 128 * 1024);
 
     pthread_t thread;
     pthread_create(&thread, &attr, dbapi_thread, NULL);
