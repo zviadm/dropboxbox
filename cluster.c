@@ -73,14 +73,20 @@ uint32_t allocate_cluster_chain(struct DirEntry *dir_entry, uint32_t size) {
     uint32_t current_size = BYTES_PER_CLUSTER;
 
     uint32_t next_cluster = first_cluster;
-    while (current_size < size) {
-        FAT_ENTRIES[next_cluster] = find_free_cluster();
+    while (1) {
+        // set next_cluster as occupied always otherwise find_free_cluster will not know
+        // that it is occupied already
+        FAT_ENTRIES[next_cluster] = FAT_EOFC_ENTRY;
         DIR_ENTRIES[next_cluster] = dir_entry;
-        next_cluster = FAT_ENTRIES[next_cluster];
-        current_size += BYTES_PER_CLUSTER;
+
+        if (current_size < size) {
+            FAT_ENTRIES[next_cluster] = find_free_cluster();
+            next_cluster = FAT_ENTRIES[next_cluster];
+            current_size += BYTES_PER_CLUSTER;
+        } else {
+            break;
+        }
     }
-    FAT_ENTRIES[next_cluster] = FAT_EOFC_ENTRY;
-    DIR_ENTRIES[next_cluster] = dir_entry;
     return first_cluster;
 }
 

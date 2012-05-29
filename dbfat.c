@@ -384,7 +384,6 @@ int read_file_sector(struct DirEntry *dir_entry, uint32_t offset, uint8_t *buf) 
 
     int ret = read_sector_from_cache(path_size, path, dir_entry->metadata.rev, offset, dir_entry->metadata.size, buf);
     free(path);
-    printf("[DEBUG] Read File Sector: %u, %u\n", dir_entry->first_cluster, offset);
     return ret;
 }
 
