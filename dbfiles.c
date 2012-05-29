@@ -12,11 +12,11 @@
 #include "dbfat.h"
 #include "dbfiles.h"
 
-#define CACHE_BLOCK_SIZE  (1 << 22) // 512KB blocks
-#define CACHE_BLOCK_COUNT 32        // number of blocks must be more than (max_prefetched_blocks * fuse_threads + block_fetcher_thread_count)
+#define CACHE_BLOCK_SIZE  (1 << 20) // 1MB blocks
+#define CACHE_BLOCK_COUNT 16        // number of blocks must be more than (max_prefetched_blocks * fuse_threads + block_fetcher_thread_count)
 
 const int BLOCK_FETCHER_THREAD_COUNT = 10; // number of threads that fetch file blocks
-const int MAX_BLOCK_PREFETCH = 5;          // maximum number of blocks to prefetch
+const int MAX_BLOCK_PREFETCH = 3;          // maximum number of blocks to prefetch
 const int READ_SECTOR_TIMEOUT = 30 * 1000; // sector reading timeout in milli seconds
 
 enum BlockState {
@@ -57,6 +57,7 @@ void initialize_file_cache() {
 
     for (int i = 0; i < CACHE_BLOCK_COUNT; i++) {
         file_cache[i] = (struct CachedBlock *)calloc(1, sizeof(struct CachedBlock));
+        assert(file_cache[i] != NULL);
     }
 
     curl_global_init(CURL_GLOBAL_ALL);
