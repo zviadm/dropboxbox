@@ -288,13 +288,6 @@ int dbapi_update() {
 }
 
 void *dbapi_thread(void *args) {
-    curl_global_init(CURL_GLOBAL_ALL);
-    dbapi_curl = curl_easy_init();
-    dbapi_cursor = calloc(1, sizeof(char));
-
-    CONSUMER_KEY    = CONSUMER_KEY_APP_FOLDER;
-    CONSUMER_SECRET = CONSUMER_SECRET_APP_FOLDER;
-
     while (1) {
         int update_more = dbapi_update();
         switch (update_more) {
@@ -307,13 +300,23 @@ void *dbapi_thread(void *args) {
 }
 
 void start_dbapi_thread() {
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_attr_setstacksize(&attr, 128 * 1024);
+    // instead of starting api thread just do deltas
+    curl_global_init(CURL_GLOBAL_ALL);
+    dbapi_curl = curl_easy_init();
+    dbapi_cursor = calloc(1, sizeof(char));
 
-    pthread_t thread;
-    pthread_create(&thread, &attr, dbapi_thread, NULL);
+    CONSUMER_KEY    = CONSUMER_KEY_APP_FOLDER;
+    CONSUMER_SECRET = CONSUMER_SECRET_APP_FOLDER;
+
+    while (dbapi_update() == 1) {
+    }
+    //pthread_attr_t attr;
+    //pthread_attr_init(&attr);
+    //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    //pthread_attr_setstacksize(&attr, 128 * 1024);
+
+    //pthread_t thread;
+    //pthread_create(&thread, &attr, dbapi_thread, NULL);
 }
 
 void dbapi_test() {
